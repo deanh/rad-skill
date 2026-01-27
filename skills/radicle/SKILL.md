@@ -315,6 +315,49 @@ rad remote list --untracked
 3. Team members clone: `rad clone rad:<RID>`
 4. Revoke access when needed: `rad id update --disallow <DID>`
 
+### Workflow: Mirror to GitHub (Optional)
+
+When initializing a Radicle repository that already has a GitHub remote, you can optionally keep both in sync.
+
+**Check for existing GitHub remote:**
+
+```bash
+git remote -v | grep github
+```
+
+**Manual sync:**
+
+```bash
+git push rad main && git push github main
+```
+
+**Automatic mirroring with post-push hook:**
+
+To auto-sync to GitHub after each Radicle push, create `.git/hooks/post-push`:
+
+```bash
+#!/bin/sh
+# Mirror pushes to GitHub (optional)
+
+remote="$1"
+if [ "$remote" = "rad" ]; then
+    git push github main 2>/dev/null || true
+fi
+```
+
+Make it executable: `chmod +x .git/hooks/post-push`
+
+**New project without GitHub:**
+
+If starting fresh, you can add GitHub later:
+
+```bash
+git remote add github https://github.com/username/repo.git
+git push -u github main
+```
+
+Note: Radicle remains the source of truth for patches and issues. GitHub serves as a read-only mirror for discoverability.
+
 ## Troubleshooting
 
 ### Node Not Running
