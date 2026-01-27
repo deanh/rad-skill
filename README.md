@@ -4,12 +4,24 @@ A Claude Code plugin for working with [Radicle](https://radicle.xyz) - a peer-to
 
 ## Installation
 
-Add to your project's `.claude/settings.json`:
+Add to your settings file:
 
 ```json
 {
-  "plugins": ["git@github.com:deanh/rad-skill.git"]
+  "extraKnownMarketplaces": {
+    "deanh-rad-skill": {
+      "source": {
+        "source": "git",
+        "url": "git@github.com:deanh/rad-skill.git"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "radicle@deanh-rad-skill": true
+  }
 }
 ```
 
-Or install globally in `~/.claude/settings.json` to make it available in all projects.
+**Global install:** Add to `~/.claude/settings.json` to make available in all projects.
+
+**Project install:** Add to `.claude/settings.json` in your project root.
