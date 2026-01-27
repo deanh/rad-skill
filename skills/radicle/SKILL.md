@@ -339,6 +339,7 @@ To auto-push to both Radicle and GitHub after each commit, create `.git/hooks/po
 #!/bin/sh
 # Auto-push to Radicle and mirror to GitHub after each commit
 
+export PATH="$HOME/.radicle/bin:$PATH"
 git push rad main 2>/dev/null || true
 git push github main 2>/dev/null || true
 ```
