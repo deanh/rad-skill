@@ -11,6 +11,12 @@ Create or authenticate cryptographic identity.
 ```bash
 rad auth                    # Interactive identity creation
 rad auth --alias "myname"   # Set display alias
+rad auth --stdin            # Read passphrase from stdin
+
+# Non-interactive examples:
+echo "" | rad auth --alias "name" --stdin        # No passphrase
+echo "pass" | rad auth --alias "name" --stdin    # With passphrase
+RAD_PASSPHRASE="pass" rad auth --alias "name"    # Via environment
 ```
 
 ### rad self
@@ -60,6 +66,14 @@ List repositories.
 rad ls                      # List local repositories
 rad ls --seeded             # List seeded repositories
 rad ls --all                # List all known repositories
+```
+
+### rad .
+
+Show current repository's RID.
+
+```bash
+rad .                       # Print RID of current repository
 ```
 
 ### rad seed / rad unseed

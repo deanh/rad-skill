@@ -41,12 +41,17 @@ If `rad` is not installed, direct the user to https://radicle.xyz/install or run
 
 ```bash
 curl -sSLf https://radicle.xyz/install | sh
+source ~/.zshenv  # Or open a new terminal
 ```
 
 If no identity exists, create one:
 
 ```bash
 rad auth
+
+# Non-interactive (for scripting):
+echo "" | rad auth --alias "name" --stdin        # No passphrase
+echo "pass" | rad auth --alias "name" --stdin    # With passphrase
 ```
 
 ## Repository Management
@@ -62,8 +67,14 @@ rad init
 # Initialize with options
 rad init --name "project-name" --description "Project description" --public
 
+# Initialize without confirmation prompt
+rad init --name "project-name" --description "Description" --public --no-confirm
+
 # Initialize as private repository
 rad init --private
+
+# Show current repository's RID
+rad .
 ```
 
 After initialization, push changes with `git push` (the rad remote is configured automatically).
@@ -244,6 +255,9 @@ rad sync --fetch
 rad sync --scope all        # All seeded repos
 rad sync --scope followed   # Only followed delegates
 
+# Announce local refs to network (after creating/updating repo)
+rad sync --announce
+
 # Pull canonical changes to working copy
 git pull
 ```
@@ -329,6 +343,27 @@ If authentication fails:
 rad self        # Check current identity
 rad auth        # Re-authenticate if needed
 ```
+
+### Understanding Node Status
+
+The `rad node status` output uses these indicators:
+
+| Symbol | Meaning |
+|--------|---------|
+| `✓` | Connected |
+| `!` | Connection attempted |
+| `✗` | Disconnected |
+| `↗` | Outbound connection |
+| `↘` | Inbound connection |
+
+### NAT and Inbound Connections
+
+"Not configured to listen for inbound connections" is normal for nodes behind NAT/firewall. The node can still:
+- Connect outbound to seeds and peers
+- Push and pull repositories
+- Participate fully in the network
+
+For inbound connections, configure port forwarding or use Tor mode.
 
 ## Additional Resources
 
