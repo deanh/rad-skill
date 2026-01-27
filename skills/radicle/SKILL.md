@@ -331,21 +331,19 @@ git remote -v | grep github
 git push rad main && git push github main
 ```
 
-**Automatic mirroring with post-push hook:**
+**Automatic sync with post-commit hook:**
 
-To auto-sync to GitHub after each Radicle push, create `.git/hooks/post-push`:
+To auto-push to both Radicle and GitHub after each commit, create `.git/hooks/post-commit`:
 
 ```bash
 #!/bin/sh
-# Mirror pushes to GitHub (optional)
+# Auto-push to Radicle and mirror to GitHub after each commit
 
-remote="$1"
-if [ "$remote" = "rad" ]; then
-    git push github main 2>/dev/null || true
-fi
+git push rad main 2>/dev/null || true
+git push github main 2>/dev/null || true
 ```
 
-Make it executable: `chmod +x .git/hooks/post-push`
+Make it executable: `chmod +x .git/hooks/post-commit`
 
 **New project without GitHub:**
 
