@@ -1,7 +1,7 @@
 {
-  "name": "local-dev",
+  "name": "rad-skill",
   "owner": {
-    "name": "Local Development"
+    "name": "hdh"
   },
   "plugins": [
     {
