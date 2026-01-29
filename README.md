@@ -17,15 +17,15 @@ Add to your settings file:
 ```json
 {
   "extraKnownMarketplaces": {
-    "deanh-rad-skill": {
+    "rad-skill": {
       "source": {
         "source": "git",
-        "url": "git@github.com:deanh/rad-skill.git"
+        "url": "rad://zvBj4kByGeQSrSy2c4H7fyK42cS8"
       }
     }
   },
   "enabledPlugins": {
-    "radicle@deanh-rad-skill": true
+    "radicle@rad-skill": true
   }
 }
 ```
