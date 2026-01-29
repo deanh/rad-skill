@@ -4,7 +4,7 @@ A Claude Code plugin for working with [Radicle](https://radicle.xyz) - a peer-to
 
 ## Features
 
-- **Plan-Driven Development**: Enter plan mode to explore the codebase and design implementation before creating tasks
+- **Issues to plans and task**: Enter plan mode to explore the codebase and design implementation before creating tasks
 - **Radicle Knowledge**: Guidance for all `rad` CLI commands (init, clone, patch, issue, sync, etc.)
 - **Bidirectional Sync**: Import Radicle issues as Claude Code tasks with automatic rollup on sync
 - **Context Loading**: Agents to load full issue/patch context including discussion history
@@ -47,7 +47,7 @@ Import a Radicle issue and break it down into actionable tasks:
 
 By default, `/rad-import` enters **plan mode** where Claude explores your codebase, designs an implementation approach, and gets your approval before creating tasks. Use `--no-plan` to skip this step for straightforward issues.
 
-Creates multiple Claude Code tasks linked to the parent issue via metadata. Each task targets 1-4 hours of work.
+Creates multiple Claude Code tasks linked to the parent issue via metadata. 
 
 ### `/rad-status [issue-id]`
 
@@ -202,7 +202,11 @@ The `issue-planner` agent parses your plan, identifies logical issue boundaries,
 
 ## Task-Issue Mapping
 
-Radicle issues are feature-level ("Implement auth"), while Claude Code tasks are work items ("Create middleware", "Write tests"). One issue becomes multiple tasks:
+This plugin assumes that your Radicle issues are feature-level ("Implement auth"), while Claude Code tasks are work items ("Create middleware", "Write tests"). 
+
+This is probably incorrect in some ways, but we want to make sure that all issues are broken down to tasks that are small enough to progress inside a single session or context window.
+
+With this assumption, pne issue becomes multiple tasks:
 
 ```
 Radicle Issue (feature)
