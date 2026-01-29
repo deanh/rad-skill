@@ -5,6 +5,9 @@ arguments:
   - name: issue-id
     description: The Radicle issue ID to import (short form like 'abc123' or full ID)
     required: true
+  - name: --no-plan
+    description: Skip entering plan mode and just create tasks without designing an implementation approach
+    required: false
 user_invocable: true
 ---
 
@@ -14,24 +17,31 @@ Import a Radicle issue and break it down into actionable Claude Code tasks for y
 
 ## Instructions
 
-1. **Fetch the issue details** using the Radicle CLI:
+1. **Ask about plan mode** (unless `--no-plan` flag was passed):
+   - Use `AskUserQuestion` immediately with these options:
+     - "Enter plan mode (Recommended)" - Will explore codebase and design implementation approach before creating tasks
+     - "Skip planning" - Create tasks directly without planning phase
+   - If user selects plan mode, use `EnterPlanMode` tool and wait for approval
+   - If user selects skip, proceed directly to fetching the issue
+
+2. **Fetch the issue details** using the Radicle CLI:
 
 ```bash
-rad issue show $ARGUMENTS
+rad issue show <issue-id>
 ```
 
-2. **Analyze the issue** to understand:
+3. **Analyze the issue** to understand:
    - The overall goal/feature being requested
    - Any acceptance criteria mentioned
    - Technical requirements or constraints
    - Related code files or components mentioned
 
-3. **Break down into discrete tasks** targeting 1-4 hour chunks of work:
+4. **Break down into discrete tasks** targeting 1-4 hour chunks of work:
    - Identify logical work units (e.g., "Create middleware", "Write tests", "Update docs")
    - Consider dependencies between tasks
    - Each task should be independently completable
 
-4. **Create Claude Code tasks** using the TaskCreate tool for each work item:
+5. **Create Claude Code tasks** using the TaskCreate tool for each work item:
 
 For each task, include this metadata to link it to the parent issue:
 ```json
@@ -43,15 +53,21 @@ For each task, include this metadata to link it to the parent issue:
 }
 ```
 
-5. **Set up task dependencies** using TaskUpdate if tasks must be completed in order:
+6. **Set up task dependencies** using TaskUpdate if tasks must be completed in order:
    - Use `addBlockedBy` to indicate prerequisites
    - Use `addBlocks` to indicate what a task enables
 
-6. **Report the import summary**:
+7. **Report the import summary**:
    - Number of tasks created
    - Brief description of each task
    - Any suggested implementation order
    - Note any ambiguities that might need clarification
+
+8. **Design implementation approach** (if in plan mode):
+   - Explore the codebase to understand existing patterns and architecture
+   - Identify key files that will need modification
+   - Draft an implementation plan for the first unblocked task
+   - Use `ExitPlanMode` when the plan is ready for user approval
 
 ## Example Output
 

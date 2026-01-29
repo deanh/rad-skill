@@ -1,0 +1,14 @@
+{
+  "name": "local-dev",
+  "owner": {
+    "name": "Local Development"
+  },
+  "plugins": [
+    {
+      "name": "radicle",
+      "description": "Claude Code plugin for Radicle - a peer-to-peer code collaboration protocol with task integration",
+      "version": "0.2.0",
+      "source": "./"
+    }
+  ]
+}

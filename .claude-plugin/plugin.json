@@ -15,6 +15,5 @@
   "agents": [
     "./agents/issue-planner.md",
     "./agents/context-loader.md"
-  ],
-  "hooks": "./hooks/hooks.json"
+  ]
 }
