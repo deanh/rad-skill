@@ -121,9 +121,38 @@ Tasks for issue abc123:
 Result: Issue NOT closed (2/4 complete)
 ```
 
+## Plan COB Synchronization
+
+When tasks have `radicle_plan_id` and `radicle_plan_task_id` metadata, also sync to Plan COBs:
+
+1. **Group tasks by Plan** using `radicle_plan_id` metadata
+
+2. **Update Plan COB task statuses**:
+   - For completed Claude Code tasks, mark corresponding Plan COB tasks as completed:
+   ```bash
+   rad-plan task complete <plan-id> <plan-task-id>
+   ```
+   - For in-progress Claude Code tasks, mark as in-progress:
+   ```bash
+   rad-plan task start <plan-id> <plan-task-id>
+   ```
+
+3. **Update Plan status** when all tasks complete:
+   ```bash
+   rad-plan status <plan-id> completed
+   ```
+
+4. **Report Plan sync status** in the summary:
+   ```
+   Plan Sync Summary:
+     Plan abc123: 4/4 tasks synced (marked completed)
+     Plan def456: 2/5 tasks synced (in progress)
+   ```
+
 ## Notes
 
 - Always run with `--dry-run` first to preview changes
 - Only tasks with `source: "radicle"` metadata are considered
 - If no Radicle-linked tasks exist, the command will report "No tasks to sync"
 - Network announcement requires the Radicle node to be running
+- Plan COB sync only runs for tasks with `radicle_plan_id` metadata

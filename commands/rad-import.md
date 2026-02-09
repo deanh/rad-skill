@@ -8,6 +8,9 @@ arguments:
   - name: --no-plan
     description: Skip entering plan mode and just create tasks without designing an implementation approach
     required: false
+  - name: --save-plan
+    description: Save the implementation plan as a Plan COB (me.hdh.plan) for sharing and tracking
+    required: false
 user_invocable: true
 ---
 
@@ -96,9 +99,47 @@ Created 4 tasks:
 Run `/rad-status` to see progress, or start working on Task #1.
 ```
 
+## Saving as Plan COB (--save-plan)
+
+When `--save-plan` is passed, create a Plan COB to persist the implementation plan:
+
+1. **Create the Plan COB** using the rad-plan CLI:
+```bash
+rad-plan open "<issue-title>" --description "<plan-description>"
+```
+
+2. **Add tasks to the Plan COB**:
+```bash
+rad-plan task add <plan-id> "<task-subject>" --description "<task-description>" --estimate "<estimate>"
+```
+
+3. **Link the Plan to the Issue**:
+```bash
+rad-plan link <plan-id> --issue <issue-id>
+```
+
+4. **Store Plan metadata** in each Claude Code task:
+```json
+{
+  "radicle_issue_id": "<the-issue-id>",
+  "radicle_plan_id": "<the-plan-id>",
+  "radicle_plan_task_id": "<the-plan-task-id>",
+  "radicle_repo": "<output-of-rad-.>",
+  "source": "radicle"
+}
+```
+
+5. **Announce to network**:
+```bash
+rad sync --announce
+```
+
+This enables bidirectional sync between Claude Code tasks and the Plan COB tasks.
+
 ## Notes
 
 - If the issue is too vague to break down, create a single task and note that clarification may be needed
 - Multiple tasks can share the same `radicle_issue_id` - this enables rollup sync
 - Use `/rad-status` to view progress across all imported issues
 - Use `/rad-sync` when tasks are complete to update the Radicle issue
+- Use `/rad-plan sync` to sync task completion to Plan COBs

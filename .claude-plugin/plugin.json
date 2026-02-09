@@ -1,19 +1,21 @@
 {
   "name": "radicle",
-  "version": "0.2.2",
-  "description": "Claude Code plugin for Radicle - a peer-to-peer code collaboration protocol with task integration",
+  "version": "0.3.0",
+  "description": "Claude Code plugin for Radicle - a peer-to-peer code collaboration protocol with task integration and Plan COB support",
   "skills": [
     "./skills/radicle/SKILL.md",
-    "./skills/rad-tasks/SKILL.md"
+    "./skills/rad-tasks/SKILL.md",
+    "./skills/rad-plans/SKILL.md"
   ],
   "commands": [
     "./commands/rad-import.md",
     "./commands/rad-sync.md",
     "./commands/rad-status.md",
-    "./commands/rad-create.md"
+    "./commands/rad-plan.md",
+    "./commands/rad-issue.md"
   ],
   "agents": [
-    "./agents/issue-planner.md",
-    "./agents/context-loader.md"
+    "./agents/context-loader.md",
+    "./agents/plan-manager.md"
   ]
 }

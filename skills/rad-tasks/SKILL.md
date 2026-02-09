@@ -77,14 +77,17 @@ Sync completed work back to Radicle:
 
 Uses **rollup logic**: an issue is only marked "solved" when ALL linked tasks are completed.
 
-### /rad-create
+### /rad-issue
 
-Create new Radicle issues from Claude Code artifacts:
+Create Radicle issues from a description, task, or plan file:
 
 ```
-/rad-create --from-task 5         # Create issue from task
-/rad-create --from-plan plan.md   # Create issues from plan file
+/rad-issue Add user profile page   # Create issue with agent research
+/rad-issue --from-task 5           # Create issue from existing task
+/rad-issue --from-plan plan.md     # Create issues from plan sections
 ```
+
+For non-trivial descriptions, dispatches three specialist research roles in parallel (product analysis, UX design, technical planning) to generate comprehensive issue content. Supports `--light`, `--standard`, `--deep` depth flags and `--single`, `--multi` splitting flags.
 
 ## Rollup Sync Logic
 
