@@ -1,3 +1,8 @@
+---
+name: rad-plans
+description: Knowledge about Radicle Plan COBs (me.hdh.plan) - a custom Collaborative Object type for storing implementation plans in Radicle repositories. Use when working with rad-plan, plan COBs, or implementation planning in Radicle.
+---
+
 # Radicle Plan COB Skill
 
 This skill provides knowledge about Plan COBs (`me.hdh.plan`) - a custom Collaborative Object type for storing implementation plans in Radicle repositories.

@@ -1,5 +1,5 @@
 ---
-name: Radicle
+name: radicle
 description: This skill should be used when the user asks to "initialize a radicle repo", "rad init", "create a patch", "open a patch", "rad patch", "clone from radicle", "rad clone", "work with radicle issues", "rad issue", "start radicle node", "rad node", "seed a repository", "sync with radicle", "push to radicle", "collaborate on radicle", or mentions RIDs, DIDs, patches, seeding, or peer-to-peer code collaboration.
 version: 0.1.0
 ---

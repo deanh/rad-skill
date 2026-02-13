@@ -54,7 +54,7 @@ With `--save-plan`, the implementation plan is saved as a Plan COB (`me.hdh.plan
 - Tracks task status in Radicle (replicates to other nodes)
 - Enables `/rad-plan sync` for bidirectional status updates
 
-Creates multiple Claude Code tasks linked to the parent issue via metadata. 
+Creates multiple Claude Code tasks linked to the parent issue via metadata.
 
 ### `/rad-status [issue-id]`
 
@@ -218,7 +218,7 @@ This parses your plan, identifies logical issue boundaries, applies labels, and 
 
 ## Task-Issue Mapping
 
-This plugin assumes that your Radicle issues are feature-level ("Implement auth"), while Claude Code tasks are work items ("Create middleware", "Write tests"). 
+This plugin assumes that your Radicle issues are feature-level ("Implement auth"), while Claude Code tasks are work items ("Create middleware", "Write tests").
 
 This is probably incorrect in some ways, but we want to make sure that all issues are broken down to tasks that are small enough to progress inside a single session or context window.
 

@@ -48,7 +48,28 @@ Synchronize Claude Code task completions back to Radicle issues. Uses rollup log
    rad sync --announce
    ```
 
-8. **Report sync summary**:
+8. **Offer context creation** for fully closed issues:
+
+   If any issues were closed in step 5 and `rad-context` is installed:
+
+   ```bash
+   command -v rad-context >/dev/null 2>&1
+   ```
+
+   Use `AskUserQuestion` to offer creating a Context COB:
+
+   ```
+   Issue <id> has been closed. Would you like to create a Context COB
+   to preserve session observations (approach, constraints, learnings, friction)?
+   ```
+
+   Options:
+   - "Create context" — Run `/rad-context create` (which gathers data and asks Claude to reflect)
+   - "Skip" — Continue without creating context
+
+   This is a natural workflow boundary — the issue is done, making it an ideal moment to capture observations. Advisory only; context creation requires user opt-in.
+
+9. **Report sync summary**:
    - Issues fully synced (marked solved)
    - Issues with partial progress
    - Any errors encountered

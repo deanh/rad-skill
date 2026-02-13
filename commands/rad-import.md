@@ -33,18 +33,42 @@ Import a Radicle issue and break it down into actionable Claude Code tasks for y
 rad issue show <issue-id>
 ```
 
-3. **Analyze the issue** to understand:
+3. **Load related contexts** (if `rad-context` is installed):
+
+   Query for Context COBs linked to this issue to surface prior session knowledge:
+
+   ```bash
+   # Check if rad-context is available
+   command -v rad-context >/dev/null 2>&1
+   ```
+
+   If available, list contexts and check each for links to this issue:
+
+   ```bash
+   rad-context list
+   rad-context show <context-id> --json
+   ```
+
+   For each context whose `related_issues` includes this issue ID, extract and present:
+   - **Constraints** — Guard rails to follow (highest priority)
+   - **Friction** — Past problems to avoid
+   - **Learnings** — Codebase discoveries that accelerate understanding
+   - **Open items** — Unfinished work from prior sessions
+
+   Include these in the planning phase so prior session knowledge informs task design.
+
+4. **Analyze the issue** to understand:
    - The overall goal/feature being requested
    - Any acceptance criteria mentioned
    - Technical requirements or constraints
    - Related code files or components mentioned
 
-4. **Break down into discrete tasks** targeting 1-4 hour chunks of work:
+5. **Break down into discrete tasks** targeting 1-4 hour chunks of work:
    - Identify logical work units (e.g., "Create middleware", "Write tests", "Update docs")
    - Consider dependencies between tasks
    - Each task should be independently completable
 
-5. **Create Claude Code tasks** using the TaskCreate tool for each work item:
+6. **Create Claude Code tasks** using the TaskCreate tool for each work item:
 
 For each task, include this metadata to link it to the parent issue:
 ```json
@@ -56,17 +80,17 @@ For each task, include this metadata to link it to the parent issue:
 }
 ```
 
-6. **Set up task dependencies** using TaskUpdate if tasks must be completed in order:
+7. **Set up task dependencies** using TaskUpdate if tasks must be completed in order:
    - Use `addBlockedBy` to indicate prerequisites
    - Use `addBlocks` to indicate what a task enables
 
-7. **Report the import summary**:
+8. **Report the import summary**:
    - Number of tasks created
    - Brief description of each task
    - Any suggested implementation order
    - Note any ambiguities that might need clarification
 
-8. **Design implementation approach** (if in plan mode):
+9. **Design implementation approach** (if in plan mode):
    - Explore the codebase to understand existing patterns and architecture
    - Identify key files that will need modification
    - Draft an implementation plan for the first unblocked task

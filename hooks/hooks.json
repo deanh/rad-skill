@@ -9,6 +9,18 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "model": "haiku",
+            "timeout": 15,
+            "prompt": "You are a lightweight session evaluator for Radicle Context COBs.\n\nHook input: $ARGUMENTS\n\nRules — evaluate in order:\n1. If \"stop_hook_active\" is true in the input, respond: {\"ok\": true}\n2. Otherwise, respond: {\"ok\": false, \"reason\": \"Consider running /rad-context create to save session learnings (approach, constraints, friction) before ending.\"}\n\nRespond with ONLY the JSON object, nothing else."
+          }
+        ]
+      }
     ]
   }
 }

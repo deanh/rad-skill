@@ -1,5 +1,5 @@
 ---
-name: Radicle Tasks
+name: rad-tasks
 description: This skill should be used when the user asks about "radicle task integration", "import radicle issues", "sync tasks to radicle", "rad-import", "rad-sync", "rad-status", "track radicle issues", "link tasks to issues", "radicle workflow", or mentions connecting Claude Code tasks with Radicle issues.
 version: 0.1.0
 ---

@@ -150,6 +150,83 @@ The patch author mentioned in Rev 2:
 "Using the existing rateLimiter from src/utils is planned for a follow-up"
 ```
 
+## Workflow for Context COBs
+
+When loading context for an issue, patch, or plan, also query for Context COBs (`me.hdh.context`) that contain prior session observations. This surfaces constraints, friction, learnings, and approach from previous work.
+
+### 1. Check if rad-context is available
+
+```bash
+command -v rad-context >/dev/null 2>&1
+```
+
+If not installed, skip this section silently.
+
+### 2. Query by link (primary)
+
+Find contexts that link to the same issue, patch, or plan being loaded:
+
+```bash
+# Get all contexts and check for links to the target
+rad-context list
+```
+
+Then for each context, check if it links to the target:
+
+```bash
+rad-context show <context-id> --json
+```
+
+Parse the JSON output to check `related_issues`, `related_patches`, or `related_plans` for the target ID.
+
+### 3. Query by files (secondary)
+
+If the issue/patch mentions specific files, or if you know which files are about to be modified, find contexts whose `files_touched` overlap:
+
+```bash
+# For each context, check files_touched in the JSON output
+rad-context show <context-id> --json
+```
+
+Compare `filesTouched` against the files referenced in the issue or changed by the patch.
+
+### 4. Surface context fields in agent-utility priority order
+
+When relevant contexts are found, include them in the summary output:
+
+```
+Prior Session Context: <context-id>
+====================================
+
+## Constraints (check these first)
+- <constraint 1>
+- <constraint 2>
+
+## Friction (avoid repeating)
+- <friction 1>
+
+## Learnings
+- repo: <repo learning>
+- code: <path>:<line> — <finding>
+
+## Approach
+<approach summary — reasoning and rejected alternatives>
+
+## Open Items
+- <unfinished work or tech debt>
+```
+
+Surface fields in this priority order:
+1. **constraints** — Guard rails that affect correctness
+2. **friction** — Avoid repeating past mistakes
+3. **learnings** — Accelerate codebase understanding
+4. **approach** — Understand reasoning and rejected alternatives
+5. **open_items** — Know what's incomplete
+
+### 5. Multiple contexts
+
+If multiple contexts link to the same target, present them chronologically (oldest first) so the narrative builds naturally. Flag any conflicting constraints across contexts.
+
 ## Context Search Patterns
 
 When discussions mention code, search for it:
