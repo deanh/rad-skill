@@ -40,7 +40,7 @@ Add to your settings file (`~/.claude/settings.json` for global, `.claude/settin
     "rad-skill": {
       "source": {
         "source": "git",
-        "url": "rad://zvBj4kByGeQSrSy2c4H7fyK42cS8"
+        "url": "https://seed.radicle.garden/zvBj4kByGeQSrSy2c4H7fyK42cS8.git"
       }
     }
   },
