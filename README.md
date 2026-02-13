@@ -1,19 +1,38 @@
-# Radicle Plugin for Claude Code
+# Radicle Skill
 
-A Claude Code plugin for working with [Radicle](https://radicle.xyz) - a peer-to-peer code collaboration protocol.
+A skill package for working with [Radicle](https://radicle.xyz) — a peer-to-peer code collaboration protocol. Supports both [Claude Code](https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview) and [pi](https://github.com/badlogic/pi-mono).
 
 ## Features
 
-- **Issues to plans and tasks**: Enter plan mode to explore the codebase and design implementation before creating tasks
-- **Plan COBs**: Save implementation plans as Radicle Collaborative Objects (`me.hdh.plan`) for network-wide sharing
 - **Radicle Knowledge**: Guidance for all `rad` CLI commands (init, clone, patch, issue, sync, etc.)
-- **Bidirectional Sync**: Import Radicle issues as Claude Code tasks with automatic rollup on sync
-- **Context Loading**: Agents to load full issue/patch context including discussion history
-- **Session Awareness**: Hooks that detect Radicle repos and remind you to sync completed work
+- **Issues to Plans and Tasks**: Break down Radicle issues into actionable work items with optional plan mode
+- **Plan COBs**: Save implementation plans as Radicle Collaborative Objects (`me.hdh.plan`)
+- **Context COBs**: Capture session observations as durable records (`me.hdh.context`) for future sessions and collaborators
+- **Bidirectional Sync**: Import issues as tasks with automatic rollup on sync (Claude Code)
+- **Context Loading**: Load full issue/patch context including discussion history and prior session observations
+- **Session Awareness**: Detect Radicle repos and surface relevant information at session start
+
+## Platform Support
+
+| Feature | Claude Code | pi |
+|---------|------------|-----|
+| Skills (radicle, rad-tasks, rad-plans, rad-contexts) | ✓ | ✓ |
+| `/rad-context` command | ✓ (markdown) | ✓ (extension) |
+| `/rad-import`, `/rad-sync`, `/rad-status` commands | ✓ | — |
+| `/rad-plan`, `/rad-issue` commands | ✓ | — |
+| Session start detection | ✓ (hook) | ✓ (extension) |
+| Compaction-triggered context creation | — | ✓ (extension) |
+| Shutdown reminder | ✓ (hook) | ✓ (extension) |
+| Context loader agent | ✓ | — |
+| Plan manager agent | ✓ | — |
+
+Skills follow the [Agent Skills standard](https://agentskills.io) and work on both platforms without modification.
 
 ## Installation
 
-Add to your settings file:
+### Claude Code
+
+Add to your settings file (`~/.claude/settings.json` for global, `.claude/settings.json` for project):
 
 ```json
 {
@@ -31,375 +50,132 @@ Add to your settings file:
 }
 ```
 
-**Global install:** Add to `~/.claude/settings.json` to make available in all projects.
+### pi
 
-**Project install:** Add to `.claude/settings.json` in your project root.
+The skills auto-discover from the `skills/` directory. The pi extension auto-discovers from `.pi/extensions/`.
 
-## Commands
+To use in another project, add to `.pi/settings.json`:
+
+```json
+{
+  "skills": ["/path/to/rad-skill/skills"],
+  "extensions": ["/path/to/rad-skill/.pi/extensions/rad-context.ts"]
+}
+```
+
+Or test directly:
+
+```bash
+pi -e /path/to/rad-skill/.pi/extensions/rad-context.ts --skill /path/to/rad-skill/skills
+```
+
+## Context COBs
+
+Context COBs (`me.hdh.context`) capture what an agent learned during a coding session — approach, constraints, friction, learnings, and open items. They're durable records stored in Radicle that replicate across the network, designed for future agents and collaborators rather than the current session.
+
+### How It Works
+
+**Claude Code:** Use `/rad-context create` to trigger the agent to reflect on the session and create a Context COB interactively.
+
+**pi:** The extension hooks into pi's compaction lifecycle:
+
+1. When the context window fills and compaction triggers, the extension stashes the serialized conversation
+2. After compaction completes, a side-channel LLM call extracts context fields (approach, friction, learnings, etc.)
+3. The Context COB is created automatically via `rad-context create --json`
+4. Commits from the session are linked, and the COB is announced to the network
+
+This piggybacks on a natural session boundary — compaction fires when the agent has accumulated the most knowledge, and the messages being compacted are exactly the session knowledge worth preserving.
+
+The `/rad-context` command is also available for manual creation:
+
+```
+/rad-context list           # List existing contexts
+/rad-context show <id>      # View context details
+/rad-context create         # Trigger LLM reflection and create a context
+```
+
+### Install rad-context CLI
+
+```bash
+rad clone rad:z2qBBbhVCfMiFEWN55oXKTPmKkrwY
+cd radicle-context-cob
+cargo install --path .
+rad-context --version
+```
+
+## Commands (Claude Code)
 
 ### `/rad-import <issue-id> [--no-plan] [--save-plan]`
 
-Import a Radicle issue and break it down into actionable tasks:
+Import a Radicle issue and break it down into tasks. Enters plan mode by default to explore the codebase before creating tasks.
 
 ```
 /rad-import abc123              # Enter plan mode first (default)
-/rad-import abc123 --no-plan    # Skip plan mode for faster import
-/rad-import abc123 --save-plan  # Save implementation plan as Plan COB
-```
-
-By default, `/rad-import` enters **plan mode** where Claude explores your codebase, designs an implementation approach, and gets your approval before creating tasks. Use `--no-plan` to skip this step for straightforward issues.
-
-With `--save-plan`, the implementation plan is saved as a Plan COB (`me.hdh.plan`) that:
-- Links bidirectionally to the source issue
-- Tracks task status in Radicle (replicates to other nodes)
-- Enables `/rad-plan sync` for bidirectional status updates
-
-Creates multiple Claude Code tasks linked to the parent issue via metadata.
-
-### `/rad-status [issue-id]`
-
-View progress dashboard for imported issues:
-
-```
-/rad-status
-
-Issue abc123: "Implement authentication"
-  [##########----------] 2/4 tasks (50%)
-  [x] Create auth middleware (completed)
-  [x] Add login endpoint (completed)
-  [>] Write auth tests (in_progress)
-  [ ] Update documentation (pending)
+/rad-import abc123 --no-plan    # Skip planning, create tasks directly
+/rad-import abc123 --save-plan  # Also save plan as a Plan COB
 ```
 
 ### `/rad-sync [--dry-run]`
 
-Sync completed tasks back to Radicle:
+Sync completed tasks back to Radicle issues. Uses rollup logic — an issue is marked "solved" only when ALL linked tasks are completed. Offers context creation when closing issues.
 
-```
-/rad-sync --dry-run   # Preview what would sync
-/rad-sync             # Sync to Radicle
-```
+### `/rad-status [issue-id]`
 
-Uses rollup logic: an issue is marked "solved" only when ALL linked tasks are completed.
+View progress dashboard for imported issues.
 
 ### `/rad-issue <description> [flags]`
 
-Create Radicle issues from a high-level description, an existing task, or a plan file:
-
-```
-/rad-issue Add user profile page         # Agent-researched comprehensive issue
-/rad-issue Fix typo in README --light    # Quick issue, no agents
-/rad-issue --from-task 5                 # Convert existing task to issue
-/rad-issue --from-plan plan.md           # Create issues from plan sections
-```
-
-For non-trivial descriptions, dispatches three specialist research roles in parallel (product analysis, UX design, technical planning) to generate business context, UX specifications, technical approach, and acceptance criteria. Automatically splits work into multiple issues if estimated effort exceeds 2 days.
-
-**Depth flags:** `--light` (no agents), `--standard` (default), `--deep` (expanded investigation)
-**Splitting flags:** `--single` (force one issue), `--multi` (force split)
+Create Radicle issues from descriptions, tasks, or plan files. Dispatches specialist research roles for non-trivial issues.
 
 ### `/rad-plan <action> [id]`
 
-Manage Plan COBs for implementation planning:
+Manage Plan COBs: list, show, create, sync, export.
 
-```
-/rad-plan list              # List all plans in the repository
-/rad-plan show abc123       # Show plan details with task status
-/rad-plan create            # Create a new Plan COB interactively
-/rad-plan sync              # Sync Claude Code task status to Plan COBs
-/rad-plan export abc123     # Export plan as markdown or JSON
-```
+### `/rad-context <action> [id]`
 
-Plan COBs (`me.hdh.plan`) store implementation plans as first-class Radicle objects that replicate across the network.
+Manage Context COBs: list, show, create, link.
 
-## Agents
+## Plan COBs
 
-### `context-loader`
+Plan COBs (`me.hdh.plan`) store implementation plans as first-class Radicle objects. They track tasks with status, estimates, and dependencies, and link bidirectionally to issues and patches.
 
-Loads comprehensive context for implementation:
+### Install rad-plan CLI
 
-- Fetches full issue details and discussion history
-- Extracts key decisions made in comments (with attribution)
-- Identifies open questions still unresolved
-- Lists relevant code files mentioned in discussions
-- Provides implementation hints from the discussion
-
-For patches:
-- Retrieves diffs and revision history
-- Summarizes review comments across all revisions
-- Shows approval status and target branch
-
-**Trigger phrases:** "load context for issue X", "what's the background on this patch", "get me up to speed on issue Y"
-
-### `plan-manager`
-
-Manages Plan COBs for implementation planning:
-
-- Creates Plan COBs from plan mode exploration
-- Syncs Claude Code task completion to Plan COB task statuses
-- Converts Plan COB tasks to Radicle issues
-- Tracks bidirectional relationships between plans, issues, and patches
-- Exports plans for sharing and documentation
-
-**Trigger phrases:** "save my plan as a Plan COB", "sync my tasks to Radicle", "convert task to issue"
-
-## Workflow
-
-The plugin creates a complete bridge between Radicle's peer-to-peer issue tracking and Claude Code's session-based task management.
-
-### Complete Session Lifecycle
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  SESSION START                                                   │
-│  Hook detects Radicle repo → shows open issue count              │
-│  "Radicle repository detected. 5 open issues."                   │
-└───────────────────────────┬─────────────────────────────────────┘
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  IMPORT: /rad-import <issue-id>                                  │
-│                                                                  │
-│  ┌─ Plan Mode (default) ─────────────────────────────────────┐  │
-│  │  • Explores codebase architecture                         │  │
-│  │  • Analyzes issue requirements                            │  │
-│  │  • Designs implementation approach                        │  │
-│  │  • Presents plan for your approval                        │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                            │                                     │
-│                            ▼                                     │
-│  ┌─ Task Creation ───────────────────────────────────────────┐  │
-│  │  • Breaks issue into 1-4 hour work items                  │  │
-│  │  • Links tasks via metadata (radicle_issue_id)            │  │
-│  │  • Sets up task dependencies (blockedBy/blocks)           │  │
-│  └───────────────────────────────────────────────────────────┘  │
-└───────────────────────────┬─────────────────────────────────────┘
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  CONTEXT: "Load context for issue X"                             │
-│  context-loader agent fetches:                                   │
-│  • Full discussion history                                       │
-│  • Key decisions made in comments                                │
-│  • Relevant code files mentioned                                 │
-│  • Implementation hints                                          │
-└───────────────────────────┬─────────────────────────────────────┘
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  WORK: Complete tasks as you implement                           │
-│  /rad-status shows live progress per issue                       │
-│                                                                  │
-│    Issue abc123: "Implement authentication"                      │
-│      [##########----------] 2/4 tasks (50%)                      │
-└───────────────────────────┬─────────────────────────────────────┘
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  SESSION END                                                     │
-│  Hook checks for completed Radicle-linked tasks                  │
-│  "Consider running /rad-sync to update Radicle."                 │
-└───────────────────────────┬─────────────────────────────────────┘
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  SYNC: /rad-sync                                                 │
-│  • Groups tasks by parent issue                                  │
-│  • Issues with ALL tasks complete → marked "solved"              │
-│  • Partial progress → issue stays open                           │
-│  • Announces changes to network                                  │
-└─────────────────────────────────────────────────────────────────┘
+```bash
+rad clone rad:z4L8L9ctRYn2bcPuUT4GRz7sggG1v
+cd radicle-plan-cob
+cargo install --path .
+rad-plan --version
 ```
 
-### Alternative: Create Issues from Plans
+## Skills
 
-You can also work in the opposite direction—create Radicle issues from Claude Code plans:
+Four knowledge skills, all following the Agent Skills standard:
 
-```
-/rad-issue --from-plan plan.md
-```
+| Skill | Description |
+|-------|-------------|
+| **radicle** | Core `rad` CLI operations — init, clone, patch, issue, sync, node management |
+| **rad-tasks** | Task-issue integration workflow and `/rad-*` commands |
+| **rad-plans** | Plan COBs (`me.hdh.plan`) and `rad-plan` CLI |
+| **rad-contexts** | Context COBs (`me.hdh.context`) and `rad-context` CLI |
 
-This parses your plan, identifies logical issue boundaries, applies labels, and creates linked Radicle issues.
+## Requirements
 
-## Task-Issue Mapping
+- [Radicle](https://radicle.xyz/install) installed and configured (`rad auth`)
+- Radicle node running for network operations (`rad node start`)
+- Optional: `rad-plan` CLI for Plan COB support
+- Optional: `rad-context` CLI for Context COB support
 
-This plugin assumes that your Radicle issues are feature-level ("Implement auth"), while Claude Code tasks are work items ("Create middleware", "Write tests").
+All COB features gracefully degrade when their CLIs are not installed.
 
-This is probably incorrect in some ways, but we want to make sure that all issues are broken down to tasks that are small enough to progress inside a single session or context window.
+## Task-Issue Mapping (Claude Code)
 
-With this assumption, pne issue becomes multiple tasks:
+Issues are feature-level ("Implement auth"), tasks are work items ("Create middleware", "Write tests"). One issue becomes multiple tasks, each sized for a single session or context window.
 
-```
-Radicle Issue (feature)
-    ├── Task 1 (completed) ✓
-    ├── Task 2 (completed) ✓
-    ├── Task 3 (in_progress)
-    └── Task 4 (pending)
-         │
-         ▼
-    Issue stays OPEN until all tasks complete
-```
-
-### Rollup Sync Logic
-
-The sync uses **conservative completion**—an issue is only marked "solved" when 100% of linked tasks are completed. This prevents premature closure of partially-done work:
+Sync uses conservative completion — an issue closes only when 100% of linked tasks are done:
 
 | Tasks Completed | Sync Behavior |
 |-----------------|---------------|
 | 4/4 (100%) | Issue closed, completion comment added |
 | 3/4 (75%) | Issue stays open, progress noted |
 | 0/4 (0%) | No action taken |
-
-### Task Metadata
-
-Tasks link to their parent issue via metadata, enabling bidirectional tracking:
-
-```json
-{
-  "radicle_issue_id": "abc123...",
-  "radicle_repo": "rad:z3GhWjk...",
-  "radicle_issue_title": "Implement authentication",
-  "source": "radicle"
-}
-```
-
-This metadata is set automatically during import and preserved through task updates.
-
-## Plan Mode Integration
-
-When you run `/rad-import`, Claude enters **plan mode** by default. This is a structured exploration phase where Claude:
-
-1. **Explores the codebase** - Understands architecture, patterns, and relevant files
-2. **Analyzes the issue** - Parses requirements, discussion history, and acceptance criteria
-3. **Designs an approach** - Proposes implementation strategy with specific files to modify
-4. **Awaits approval** - Presents the plan for your review before creating tasks
-
-### Why Plan First?
-
-Plan mode ensures Claude understands your codebase before committing to a task breakdown. This is valuable for:
-
-- **Complex features** that touch multiple systems
-- **Unfamiliar codebases** where architecture discovery is needed
-- **Issues with discussion** that may contain important context
-- **Architectural decisions** that should be validated before implementation
-
-### Skipping Plan Mode
-
-For straightforward issues where you already know the implementation approach:
-
-```
-/rad-import abc123 --no-plan
-```
-
-This immediately creates tasks without the exploration phase.
-
-### Plan-to-Issue Flow
-
-You can also convert existing plans into Radicle issues:
-
-```
-/rad-issue --from-plan implementation-plan.md
-```
-
-This will:
-- Parse plan structure (## headers become issue candidates)
-- Detect appropriate labels (feature, bug, docs, test, security)
-- Create issues with descriptions and acceptance criteria
-
-## Hooks
-
-The plugin includes automatic hooks that integrate with your session lifecycle:
-
-### SessionStart
-
-When you open Claude Code in a Radicle repository:
-- Detects the repository via `rad .`
-- Shows the repository ID and open issue count
-- Suggests `/rad-import` to get started
-
-```
-Radicle repository detected: rad:z3GhWjk...
-Open issues: 5
-
-Use /rad-import <issue-id> to import an issue as tasks.
-Use 'rad issue list' to see all open issues.
-```
-
-### Stop
-
-When you end your session:
-- Checks for completed tasks linked to Radicle issues
-- Reminds you to run `/rad-sync` if unsynced work exists
-- Advisory only—does not block session end
-
-## Skills
-
-The plugin provides three knowledge skills:
-
-- **Radicle**: Core knowledge for all `rad` CLI operations (init, clone, patch, issue, sync, node management)
-- **Radicle Tasks**: Documentation for the task-issue integration workflow and all `/rad-*` commands
-- **Radicle Plans**: Documentation for Plan COBs (`me.hdh.plan`) and the `rad-plan` CLI
-
-## Requirements
-
-- [Radicle](https://radicle.xyz/install) installed and configured (`rad auth`)
-- Radicle node running for network operations (`rad node start`)
-- (Optional) `rad-plan` CLI for Plan COB support (see below)
-
-## Plan COB Support
-
-Plan COBs are a custom Collaborative Object type (`me.hdh.plan`) for storing implementation plans. To use Plan COB features:
-
-### Install rad-plan CLI
-
-```bash
-# Clone and install from Radicle
-rad clone rad:z4L8L9ctRYn2bcPuUT4GRz7sggG1v
-cd radicle-plan-cob
-cargo install --path .
-
-# Verify installation
-rad-plan --version
-```
-
-The session-start hook automatically detects whether `rad-plan` is installed and shows install instructions if not.
-
-### What are Plan COBs?
-
-Plan COBs extend Radicle with implementation planning capabilities:
-
-- **Persisted plans**: Save plan mode exploration as sharable, versioned plans
-- **Task tracking**: Track tasks within plans with status, estimates, and dependencies
-- **Bidirectional linking**: Link plans to Issues and Patches
-- **Network sync**: Plans replicate across the Radicle network like Issues and Patches
-- **CRDT semantics**: Conflict-free collaboration on plan updates
-
-### Plan COB Workflow
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  IMPORT WITH PLAN: /rad-import abc123 --save-plan               │
-│                                                                  │
-│  Creates Plan COB linked to issue with:                          │
-│  • Tasks derived from implementation breakdown                   │
-│  • Critical files identified during exploration                  │
-│  • Bidirectional link to source issue                            │
-└───────────────────────────┬─────────────────────────────────────┘
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  WORK: Complete tasks, tracked in both systems                   │
-│                                                                  │
-│  Claude Code Tasks ←→ Plan COB Tasks                             │
-│  (local session)       (replicated network-wide)                 │
-└───────────────────────────┬─────────────────────────────────────┘
-                            ▼
-┌─────────────────────────────────────────────────────────────────┐
-│  SYNC: /rad-plan sync                                            │
-│                                                                  │
-│  Updates Plan COB task statuses to match Claude Code:            │
-│  • Completed tasks → marked complete in Plan COB                 │
-│  • All tasks done → Plan status set to "completed"               │
-│  • Changes announced to Radicle network                          │
-└─────────────────────────────────────────────────────────────────┘
-```
-
-### Type Name
-
-Plans are stored as `me.hdh.plan` COBs under `refs/cobs/me.hdh.plan/<PLAN-ID>`.
-
-This uses the reverse domain notation convention (`me.hdh.*`) for custom COB types, with potential for upstream inclusion as `xyz.radicle.plan` if the community finds it valuable.
