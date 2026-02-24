@@ -11,6 +11,9 @@ arguments:
   - name: --save-plan
     description: Save the implementation plan as a Plan COB (me.hdh.plan) for sharing and tracking
     required: false
+  - name: --dispatch
+    description: After creating the plan, immediately show dispatch instructions for parallel worker execution
+    required: false
 user_invocable: true
 ---
 
@@ -160,6 +163,24 @@ rad sync --announce
 
 This enables bidirectional sync between Claude Code tasks and the Plan COB tasks.
 
+## Dispatch Mode (--dispatch)
+
+When `--dispatch` is passed (implies `--save-plan`), after creating the Plan COB, immediately show dispatch instructions:
+
+1. **Create the Plan COB** as in the `--save-plan` flow above
+2. **Set plan status to approved**:
+```bash
+rad-plan status <plan-id> approved
+```
+3. **Run dispatch analysis** — categorize tasks as Ready, Blocked (dependency), or Blocked (file conflict) using the same logic as `/rad-dispatch`:
+   - Ready: pending, all dependencies met, no file overlap with in-progress tasks
+   - Blocked: pending, has unmet dependencies or file conflicts
+4. **Present dispatch instructions** for each ready task, including:
+   - Task ID, subject, affected files
+   - Suggested worktree name
+   - Worker launch guidance
+5. **Inform the user** they can re-run `/rad-dispatch <plan-id>` after workers complete to see the next batch
+
 ## Notes
 
 - If the issue is too vague to break down, create a single task and note that clarification may be needed
@@ -167,3 +188,4 @@ This enables bidirectional sync between Claude Code tasks and the Plan COB tasks
 - Use `/rad-status` to view progress across all imported issues
 - Use `/rad-sync` when tasks are complete to update the Radicle issue
 - Use `/rad-plan sync` to sync task completion to Plan COBs
+- Use `/rad-dispatch` to see which tasks are ready for parallel worker execution

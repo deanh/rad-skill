@@ -8,6 +8,7 @@ A skill package for working with [Radicle](https://radicle.xyz) — a peer-to-pe
 - **Issues to Plans and Tasks**: Break down Radicle issues into actionable work items with optional plan mode
 - **Plan COBs**: Save implementation plans as Radicle Collaborative Objects (`me.hdh.plan`)
 - **Context COBs**: Capture session observations as durable records (`me.hdh.context`) for future sessions and collaborators
+- **Worktree Dispatch**: Coordinate parallel task execution across git worktrees using COBs as shared state
 - **Bidirectional Sync**: Import issues as tasks with automatic rollup on sync (Claude Code)
 - **Context Loading**: Load full issue/patch context including discussion history and prior session observations
 - **Session Awareness**: Detect Radicle repos and surface relevant information at session start
@@ -20,11 +21,13 @@ A skill package for working with [Radicle](https://radicle.xyz) — a peer-to-pe
 | `/rad-context` command | ✓ (markdown) | ✓ (extension) |
 | `/rad-import`, `/rad-sync`, `/rad-status` commands | ✓ | — |
 | `/rad-plan`, `/rad-issue` commands | ✓ | — |
+| `/rad-dispatch` command | ✓ | — |
 | Session start detection | ✓ (hook) | ✓ (extension) |
 | Compaction-triggered context creation | — | ✓ (extension) |
 | Shutdown reminder | ✓ (hook) | ✓ (extension) |
 | Context loader agent | ✓ | — |
-| Plan manager agent | ✓ | — |
+| Plan manager agent (with dispatch) | ✓ | — |
+| Worker agent (worktree execution) | ✓ | — |
 
 Skills follow the [Agent Skills standard](https://agentskills.io) and work on both platforms without modification.
 
@@ -92,7 +95,7 @@ Four knowledge skills, all following the Agent Skills standard:
 
 ## Tasks (Claude Code)
 
-### `/rad-import <issue-id> [--no-plan] [--save-plan]`
+### `/rad-import <issue-id> [--no-plan] [--save-plan] [--dispatch]`
 
 Import a Radicle issue and break it down into tasks. Enters plan mode by default to explore the codebase before creating tasks.
 
@@ -100,6 +103,7 @@ Import a Radicle issue and break it down into tasks. Enters plan mode by default
 /rad-import abc123              # Enter plan mode first (default)
 /rad-import abc123 --no-plan    # Skip planning, create tasks directly
 /rad-import abc123 --save-plan  # Also save plan as a Plan COB
+/rad-import abc123 --dispatch   # Save plan and show dispatch instructions
 ```
 
 ### `/rad-sync [--dry-run]`
@@ -121,6 +125,36 @@ Manage Plan COBs: list, show, create, sync, export.
 ### `/rad-context <action> [id]`
 
 Manage Context COBs: list, show, create, link.
+
+### `/rad-dispatch <plan-id>`
+
+Analyze a Plan COB and identify tasks ready for parallel dispatch to workers in worktrees.
+
+```
+/rad-dispatch abc123            # Show dispatchable tasks, context feedback
+```
+
+Shows: plan status overview, ready/blocked/in-progress tasks, context feedback from completed workers, and worker launch guidance. Run iteratively between batches.
+
+## Worktree Dispatch (Claude Code)
+
+The dispatch workflow coordinates parallel task execution across git worktrees, using COBs as the shared coordination layer. COBs live in `~/.radicle/storage/` and are visible from all worktrees instantly — code is isolated per worktree, metadata flows freely.
+
+### Workflow
+
+1. **Import and plan**: `/rad-import <issue-id> --dispatch` creates a Plan COB with tasks
+2. **Dispatch**: `/rad-dispatch <plan-id>` identifies ready tasks (unblocked, no file conflicts with in-progress work)
+3. **Workers**: Launch `claude --worktree` sessions per task — each worker claims a task, implements, produces a commit + patch + Context COB
+4. **Iterate**: Re-run `/rad-dispatch` to see context feedback from completed workers and the next batch of ready tasks
+5. **Complete**: When all tasks pass, close the plan and issue
+
+### Agents
+
+| Agent | Role | Runs In |
+|-------|------|---------|
+| **plan-manager** | Creates plans, dispatches tasks, evaluates context feedback | Main worktree |
+| **worker** | Executes one task: code, commit, patch, Context COB | Isolated worktree |
+| **context-loader** | Loads issue/patch/context details for other agents | Any worktree |
 
 ## Task-Issue Mapping (Claude Code)
 

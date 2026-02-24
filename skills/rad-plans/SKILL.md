@@ -97,12 +97,42 @@ rad-plan task add <plan-id> "Task subject" \
   --files "src/auth.ts,src/middleware.ts"
 ```
 
+### rad-plan task edit
+
+Edit a task's details:
+
+```bash
+rad-plan task edit <plan-id> <task-id> --subject "Updated title"
+rad-plan task edit <plan-id> <task-id> --description "New details"
+rad-plan task edit <plan-id> <task-id> --estimate "6h"
+rad-plan task edit <plan-id> <task-id> --files "src/client.rs,src/config.rs"
+```
+
+All flags are optional. Only provided fields are updated.
+
+### rad-plan task start
+
+Mark task as in-progress:
+
+```bash
+rad-plan task start <plan-id> <task-id>
+```
+
 ### rad-plan task complete
 
 Mark task complete:
 
 ```bash
 rad-plan task complete <plan-id> <task-id>
+```
+
+### rad-plan comment
+
+Add a comment to a plan's discussion thread:
+
+```bash
+rad-plan comment <plan-id> "Comment text"
+rad-plan comment <plan-id> "Reply text" --reply-to <comment-id>
 ```
 
 ### rad-plan link
