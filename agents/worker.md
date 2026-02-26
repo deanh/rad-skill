@@ -67,6 +67,7 @@ rad-context show <context-id> --json
 
 A context is relevant if:
 - Its `related_plans` includes your plan-id, OR
+- Its `taskId` references a task in the same plan, OR
 - Its `filesTouched` overlaps with your task's `affected_files`
 
 Surface relevant context fields in agent-utility priority order:
@@ -75,6 +76,7 @@ Surface relevant context fields in agent-utility priority order:
 3. **learnings** — Accelerate codebase understanding.
 4. **approach** — Understand reasoning and rejected alternatives.
 5. **open_items** — Know what's incomplete.
+6. **verification** — What checks passed/failed in the prior session.
 
 ### 4. Read the linked issue
 
@@ -137,6 +139,17 @@ Capture the patch ID from the output.
 
 Reflect on your session and create a Context COB capturing your observations:
 
+First, run verification checks and record the results:
+
+```bash
+# Run your project's build/test/lint commands and note pass/fail/skip for each
+cargo build   # or npm run build, make, etc.
+cargo test    # or npm test, pytest, etc.
+cargo clippy  # or eslint, etc.
+```
+
+Then create the context:
+
 ```bash
 echo '{
   "title": "<brief description of what you did>",
@@ -155,11 +168,19 @@ echo '{
   },
   "friction": ["<specific past-tense problems encountered>"],
   "openItems": ["<unfinished work, tech debt, known gaps>"],
-  "filesTouched": ["<files you actually modified>"]
+  "filesTouched": ["<files you actually modified>"],
+  "verification": [
+    {"check": "cargo build", "result": "pass", "note": "compiles cleanly"},
+    {"check": "cargo test", "result": "pass", "note": "all 15 tests passed"},
+    {"check": "cargo clippy", "result": "pass"}
+  ],
+  "taskId": "<task-id>"
 }' | rad-context create --json
 ```
 
 Capture the context ID from the output.
+
+**Important**: JSON input is validated strictly — unknown fields are rejected (catches typos) and `title`, `description`, `approach` must be non-empty. If creation fails, read the error message and fix the JSON.
 
 **Guidance for each field:**
 - **approach**: Be specific about what alternatives you considered and why you chose this path
@@ -168,6 +189,8 @@ Capture the context ID from the output.
 - **learnings.code**: Specific file locations with non-obvious findings
 - **friction**: Only include problems that cost real time — actionable for future sessions
 - **openItems**: Only include genuine gaps or debt, not aspirational improvements
+- **verification**: Record the actual result of each check you ran — pass, fail, or skip with an optional note
+- **taskId**: Always set this to your assigned `task-id` so the context links back to the plan task
 
 ### 4. Link the Context COB
 

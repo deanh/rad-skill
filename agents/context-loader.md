@@ -197,6 +197,7 @@ When relevant contexts are found, include them in the summary output:
 ```
 Prior Session Context: <context-id>
 ====================================
+Task: <task-id> (if present — identifies which plan task produced this context)
 
 ## Constraints (check these first)
 - <constraint 1>
@@ -214,6 +215,10 @@ Prior Session Context: <context-id>
 
 ## Open Items
 - <unfinished work or tech debt>
+
+## Verification
+- [PASS] cargo test: all tests passed
+- [FAIL] clippy: 2 warnings
 ```
 
 Surface fields in this priority order:
@@ -222,6 +227,7 @@ Surface fields in this priority order:
 3. **learnings** — Accelerate codebase understanding
 4. **approach** — Understand reasoning and rejected alternatives
 5. **open_items** — Know what's incomplete
+6. **verification** — What checks passed/failed (especially useful when a prior context has failures)
 
 ### 5. Multiple contexts
 

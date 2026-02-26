@@ -44,7 +44,7 @@ The primary mechanism for creating Context COBs. This requires Claude's active p
    git log --oneline -10
    ```
 
-   Also check `TaskList` for tasks with `radicle_issue_id`, `radicle_plan_id`, or `radicle_patch_id` metadata — these provide auto-link targets.
+   Also check `TaskList` for tasks with `radicle_issue_id`, `radicle_plan_id`, `radicle_plan_task_id`, or `radicle_patch_id` metadata — these provide auto-link targets and the task ID for the `taskId` field.
 
 3. **Reflect on the session** to fill agent-first fields:
 
@@ -59,6 +59,7 @@ The primary mechanism for creating Context COBs. This requires Claude's active p
    - **friction**: What went wrong. Be specific, past-tense, actionable. "Type inference failed on nested generics in X" not "types were tricky."
    - **open_items**: Unfinished work, tech debt introduced, known gaps. Things the next session should know about.
    - **description**: Free-form summary (useful for standalone contexts without a plan)
+   - **verification**: Run checks (build, test, lint) and record structured results. Each result has a `check` name, a `result` (pass/fail/skip), and an optional `note`.
 
 4. **Present for review** using `AskUserQuestion`:
 
@@ -83,6 +84,11 @@ The primary mechanism for creating Context COBs. This requires Claude's active p
    Open Items:
    - <open item 1>
 
+   Verification:
+   - [PASS] cargo test: all tests passed
+   - [PASS] cargo clippy: no new warnings
+
+   Task: <task-id> (if from a plan task)
    Files: <file list>
    Links: issue <id>, plan <id>, commits <sha1>, <sha2>
    ```
@@ -105,11 +111,21 @@ The primary mechanism for creating Context COBs. This requires Claude's active p
      },
      "friction": ["..."],
      "openItems": ["..."],
-     "filesTouched": ["..."]
+     "filesTouched": ["..."],
+     "verification": [
+       {"check": "cargo test", "result": "pass", "note": "all tests passed"},
+       {"check": "cargo clippy", "result": "pass"}
+     ],
+     "taskId": "<plan-task-id or omit>"
    }' | rad-context create --json
    ```
 
    Capture the context ID from the output.
+
+   **Important**: JSON input is validated strictly:
+   - Unknown fields are rejected (catches typos — the error lists all valid field names)
+   - `title`, `description`, and `approach` must be non-empty
+   - If validation fails, read the error message and fix the JSON
 
 6. **Auto-link** from gathered metadata:
 
@@ -180,5 +196,8 @@ Interactive linking flow:
 - Context creation is most valuable at session end, when Claude has full understanding of what happened
 - The Stop hook will gently remind users about context creation at natural stopping points
 - All core fields are immutable after creation — only links can be added/removed later
-- JSON fields use camelCase: `openItems`, `filesTouched`
+- JSON fields use camelCase: `openItems`, `filesTouched`, `taskId`
 - If no tasks have Radicle metadata, the context is still valuable as a standalone observation
+- All IDs accept short-form prefixes (minimum 7 hex chars) — no need to use full 40-char IDs
+- `filesTouched` is auto-populated from the HEAD commit by default — use `--no-auto-files` to disable
+- Use `--auto-link-commits <ref>` to automatically link all commits since a given ref (e.g. a branch point)

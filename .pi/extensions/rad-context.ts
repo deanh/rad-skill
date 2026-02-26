@@ -29,7 +29,8 @@ Output ONLY valid JSON matching this schema — no markdown fences, no commentar
   },
   "friction": ["Specific, past-tense problems encountered. 'Type inference failed on nested generics in X' not 'types were tricky'"],
   "openItems": ["Unfinished work, tech debt introduced, known gaps"],
-  "filesTouched": ["files/actually/modified.ts"]
+  "filesTouched": ["files/actually/modified.ts"],
+  "verification": [{"check": "cargo test", "result": "pass", "note": "all tests passed"}]
 }
 
 Rules:
@@ -38,6 +39,7 @@ Rules:
 - learnings.code: include file paths and line numbers where possible.
 - approach: include rejected alternatives and why they were rejected.
 - openItems: only things the next session needs to know about.
+- verification: if tests, builds, or lints were run, record each as {"check": "<name>", "result": "pass"|"fail"|"skip", "note": "<optional detail>"}. Omit if no checks were run.
 - Omit empty arrays. Keep every field concise.`;
 
 export default function (pi: ExtensionAPI) {

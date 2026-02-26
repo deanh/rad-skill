@@ -320,6 +320,8 @@ Evaluate context fields against remaining tasks:
 | `friction` relevant to upcoming tasks | Same pitfall likely ahead | Include warning in dispatch output for the affected task |
 | `filesTouched ⊄ affected_files` | Worker modified unexpected files | Update mental model of file scope, re-check conflict detection |
 | `learnings.code` revealing architecture issues | Structural problem | Flag for human attention |
+| `verification` with failures | Worker's checks didn't all pass | Flag failing checks, consider blocking dependent tasks until resolved |
+| `taskId` present | Context traces back to a specific plan task | Use to correlate context feedback with exact task in the plan |
 
 ### 6. Output Dispatch Instructions
 

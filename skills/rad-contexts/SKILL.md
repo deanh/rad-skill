@@ -37,6 +37,8 @@ Stored under `refs/cobs/me.hdh.context/<CONTEXT-ID>` in the Git repository.
 | `friction` | string[] | Past-tense problems encountered — specific and actionable |
 | `open_items` | string[] | Unfinished work, tech debt introduced, known gaps |
 | `files_touched` | string set | Files actually modified during the session |
+| `verification` | VerificationResult[] | Structured pass/fail/skip results from checks run during the session |
+| `task_id` | string? | Plan task ID that produced this context (links context to a specific plan task) |
 | `related_commits` | string set | Git commit SHAs (mutable via link/unlink) |
 | `related_issues` | ObjectId set | Linked Radicle issues (mutable via link/unlink) |
 | `related_patches` | ObjectId set | Linked Radicle patches (mutable via link/unlink) |
@@ -60,6 +62,20 @@ Stored under `refs/cobs/me.hdh.context/<CONTEXT-ID>` in the Git repository.
 - `repo`: Repository-level patterns and conventions
 - `code`: File-specific findings with optional line references (`line`, `endLine`)
 
+### VerificationResult
+
+```json
+{
+  "check": "cargo test",
+  "result": "pass",
+  "note": "all 25 tests passed"
+}
+```
+
+- `check`: Name of the verification step (e.g. "cargo test", "clippy", "unit tests")
+- `result`: One of `"pass"`, `"fail"`, or `"skip"` (lowercase)
+- `note`: Optional details about the outcome
+
 ## Agent-Utility Priority Order
 
 When consuming contexts, surface fields in this order:
@@ -81,9 +97,24 @@ When consuming contexts, surface fields in this order:
 
 When linked together: the **"what"** comes from the Plan, the **"how"** comes from the Context.
 
+## Short-Form IDs
+
+All commands accept short-form IDs (minimum 7 hex characters) for both context IDs and linked object IDs. For example:
+
+```bash
+rad-context show 0ab784b           # instead of full 40-char ID
+rad-context link 0ab784b --issue 40c8b56
+```
+
+If a prefix is ambiguous (matches multiple objects), the error lists all matches.
+
 ## CLI Commands
 
 ### rad-context create
+
+`filesTouched` is auto-populated from the HEAD commit by default. Use `--no-auto-files` to disable this and rely only on explicitly provided files (from `--file` flags or JSON input).
+
+Use `--auto-link-commits <ref>` to automatically link all commits between `<ref>` (exclusive) and HEAD (inclusive) to the new context.
 
 Create from flags:
 
@@ -94,7 +125,8 @@ rad-context create "Session title" \
   --constraint "Assumes X remains true" \
   --friction "Type errors with async closures" \
   --open-item "Refresh token rotation not implemented" \
-  --file src/auth.rs --file src/middleware.rs
+  --file src/auth.rs --file src/middleware.rs \
+  --task <plan-task-id>
 ```
 
 Create from JSON (used by `/rad-context` command):
@@ -154,11 +186,23 @@ rad-context unlink <context-id> --issue <issue-id>
   },
   "friction": ["Type errors with async middleware closures"],
   "openItems": ["Refresh token rotation not implemented"],
-  "filesTouched": ["src/auth.rs", "src/middleware.rs"]
+  "filesTouched": ["src/auth.rs", "src/middleware.rs"],
+  "verification": [
+    {"check": "cargo test", "result": "pass", "note": "all tests passed"},
+    {"check": "cargo clippy", "result": "pass"}
+  ],
+  "taskId": "task-a1b2"
 }
 ```
 
-Note: JSON uses camelCase (`openItems`, `filesTouched`).
+Note: JSON uses camelCase (`openItems`, `filesTouched`, `taskId`). Verification and taskId are optional — omit when not applicable.
+
+### JSON Validation
+
+The `--json` input is strict:
+- **Unknown fields are rejected** with an error listing all valid field names (catches typos)
+- **`title`, `description`, and `approach` are required** — empty values produce a hard error with guidance
+- Agents can self-correct from the error messages
 
 ## Claude Code Integration
 
