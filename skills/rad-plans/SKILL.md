@@ -12,7 +12,7 @@ This skill provides knowledge about Plan COBs (`me.hdh.plan`) - a custom Collabo
 Plan COBs are first-class collaborative objects that store implementation plans within Radicle repositories. They enable:
 
 - **Persisted planning**: Save plan mode exploration as sharable, versioned plans
-- **Task tracking**: Track tasks within plans with status, estimates, and dependencies
+- **Task tracking**: Track tasks within plans with estimates, dependencies, and commit-based completion
 - **Bidirectional linking**: Link plans to Issues and Patches
 - **Network sync**: Plans replicate across the Radicle network like Issues and Patches
 - **CRDT semantics**: Conflict-free collaboration on plan updates
@@ -34,7 +34,7 @@ A Plan COB contains:
 | `title` | Plan title |
 | `description` | Detailed plan description |
 | `status` | Draft, Approved, InProgress, Completed, Archived |
-| `tasks[]` | List of tasks with subject, description, estimate, status |
+| `tasks[]` | List of tasks with subject, description, estimate, affectedFiles, linkedCommit |
 | `related_issues[]` | Linked Radicle issue IDs |
 | `related_patches[]` | Linked Radicle patch IDs |
 | `critical_files[]` | Files the plan will modify |
@@ -52,12 +52,16 @@ Each task within a plan:
 | `subject` | Task title |
 | `description` | Optional detailed description |
 | `estimate` | Time estimate (e.g., "2h", "1d") |
-| `status` | Pending, InProgress, Completed, Skipped |
+| `affectedFiles[]` | Files this task modifies |
+| `linkedCommit` | Commit OID that completes this task (null if not done) |
 | `blocked_by[]` | IDs of blocking tasks |
-| `affected_files[]` | Files this task modifies |
 | `linked_issue` | If converted to a Radicle issue |
 
+A task is **done** when `linkedCommit` is present. There is no mutable status field.
+
 ## CLI Commands
+
+All commands accept **short-form IDs** (minimum 7 hex characters) for plans, tasks, issues, patches, and commits. Ambiguous prefixes produce a clear error.
 
 ### rad-plan open
 
@@ -110,20 +114,45 @@ rad-plan task edit <plan-id> <task-id> --files "src/client.rs,src/config.rs"
 
 All flags are optional. Only provided fields are updated.
 
-### rad-plan task start
+### rad-plan task link-commit
 
-Mark task as in-progress:
+Link a task to its implementing commit (marks it done):
 
 ```bash
-rad-plan task start <plan-id> <task-id>
+rad-plan task link-commit <plan-id> <task-id> --commit <commit-oid>
 ```
 
-### rad-plan task complete
+### rad-plan task list
 
-Mark task complete:
+List tasks in a plan:
 
 ```bash
-rad-plan task complete <plan-id> <task-id>
+rad-plan task list <plan-id>
+```
+
+### rad-plan task remove
+
+Remove a task from a plan:
+
+```bash
+rad-plan task remove <plan-id> <task-id>
+```
+
+### rad-plan task link
+
+Link a task to a Radicle issue:
+
+```bash
+rad-plan task link <plan-id> <task-id> --issue <issue-id>
+```
+
+### rad-plan edit
+
+Edit plan title or description:
+
+```bash
+rad-plan edit <plan-id> --title "New title"
+rad-plan edit <plan-id> --description "New description"
 ```
 
 ### rad-plan comment
@@ -177,12 +206,12 @@ Claude Code tasks created from plans include:
 }
 ```
 
-### Syncing Status
+### Syncing Completion
 
-Use `/rad-plan sync` or `/rad-sync` to synchronize:
+Use `/rad-sync` to synchronize:
 
-- Claude Code task completion → Plan COB task status
-- Plan status auto-updates when all tasks complete
+- Claude Code task completion → Plan COB task via `task link-commit`
+- Plan status auto-updates when all tasks have `linkedCommit`
 
 ## Workflow Example
 
@@ -206,14 +235,14 @@ Complete tasks normally. Claude Code tracks progress locally.
 ### 3. Sync Progress
 
 ```
-/rad-plan sync
+/rad-sync
 ```
 
-This updates Plan COB task statuses to match Claude Code.
+This links commits to Plan COB tasks, marking them done.
 
 ### 4. Close Issue
 
-When all tasks complete:
+When all tasks have `linkedCommit`:
 - Plan status → Completed
 - `/rad-sync` marks issue as solved
 

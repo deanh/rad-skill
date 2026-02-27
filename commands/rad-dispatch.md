@@ -3,7 +3,7 @@ name: rad-dispatch
 description: Analyze a Plan COB and identify tasks ready for dispatch to workers in parallel worktrees
 arguments:
   - name: plan-id
-    description: The Plan COB ID to dispatch from (short form like 'abc123' or full ID)
+    description: The Plan COB ID to dispatch from (short form like 'abc1234' or full ID)
     required: true
 user_invocable: true
 ---
@@ -11,6 +11,12 @@ user_invocable: true
 # Dispatch Tasks from Plan COB
 
 Analyze a Plan COB to identify which tasks are ready for parallel execution in worktrees, surface context feedback from completed workers, and provide dispatch instructions.
+
+All `rad-plan` commands accept **short-form IDs** (minimum 7 hex characters).
+
+## Task Completion Model
+
+Tasks have no mutable status field. A task is **done** when `linkedCommit` is present in the JSON. In-progress tasks are identified by CLAIM comments in the plan's discussion thread.
 
 ## Instructions
 
@@ -30,19 +36,19 @@ rad-plan show <plan-id> --json
 
 Parse the full JSON to get:
 - Plan title, status, description
-- All tasks with: id, subject, description, status, blocked_by, affected_files, linked_issue
+- All tasks with: `id`, `subject`, `description`, `estimate`, `affectedFiles`, `linkedCommit`
 - Related issues and patches
-- Discussion thread (for SIGNAL comments)
+- Discussion thread (for CLAIM and SIGNAL comments)
 
 3. **Categorize all tasks**:
 
 For each task, determine its category:
 
-- **Completed**: status = "completed"
-- **In Progress**: status = "inProgress"
-- **Ready**: status = "pending" AND all `blocked_by` tasks are "completed" AND no `affected_files` overlap with any in-progress task's files
-- **Blocked (dependency)**: status = "pending" AND at least one `blocked_by` task is not "completed"
-- **Blocked (file conflict)**: status = "pending" AND all dependencies met BUT `affected_files` overlap with an in-progress task's files
+- **Completed**: `linkedCommit` is present (non-null)
+- **In Progress**: No `linkedCommit` but has a CLAIM comment in the plan thread (`CLAIM task:<task-id>`)
+- **Ready**: No `linkedCommit`, no CLAIM, all `blocked_by` tasks have `linkedCommit`, and no `affectedFiles` overlap with in-progress tasks
+- **Blocked (dependency)**: No `linkedCommit` and at least one `blocked_by` task lacks `linkedCommit`
+- **Blocked (file conflict)**: All dependencies met but `affectedFiles` overlap with an in-progress task
 
 4. **Check for SIGNAL comments** in the plan's discussion thread:
 
@@ -89,18 +95,19 @@ Dispatch: <plan-title> (<plan-id>)
 Status: 2/5 completed | 1 in progress | 1 ready | 1 blocked
 
 ── Completed ──────────────────────────────
-  ✓ task-a1b2: "Add retry middleware"
-  ✓ task-g7h8: "Update config schema"
+  ✓ task-a1b2: "Add retry middleware" — 6d6e328
+  ✓ task-g7h8: "Update config schema" — 9a1b2c3
 
 ── In Progress ────────────────────────────
   ◉ task-c3d4: "Add config validation"
     Files: src/config.rs, src/types.rs
+    Claimed by: CLAIM comment at 2024-01-15 10:30
 
 ── Ready for Dispatch ─────────────────────
   ○ task-e5f6: "Add retry tests"
     Files: tests/retry.rs, tests/helpers.rs
     Worktree: worktree-e5f6-retry-tests
-    Start: rad-plan task start <plan-id> task-e5f6
+    Claim: rad-plan comment <plan-id> "CLAIM task:e5f6"
 
 ── Blocked ────────────────────────────────
   ✕ task-i9j0: "Integration tests"
@@ -121,10 +128,10 @@ Status: 2/5 completed | 1 in progress | 1 ready | 1 blocked
 To dispatch task-e5f6:
   1. Open a new terminal
   2. Launch: claude --worktree worktree-e5f6
-  3. Tell the worker: "Execute plan-id task-e5f6 from plan <plan-id>"
+  3. Tell the worker: "Execute task e5f6 from plan <plan-id>"
 ```
 
-8. **When all tasks are complete**, offer to close the plan:
+8. **When all tasks are complete** (all have `linkedCommit`), offer to close the plan:
 
 ```
 All tasks complete!
@@ -142,6 +149,7 @@ Use `AskUserQuestion` to confirm before closing.
 ## Notes
 
 - Run `/rad-dispatch` iteratively between batches — it reads fresh plan state each time
-- File conflict detection uses `affected_files` from the Plan COB plus any SIGNAL comments from workers
+- File conflict detection uses `affectedFiles` from the Plan COB plus any SIGNAL comments from workers
 - Context feedback is loaded from `rad-context` if available; gracefully skipped if not installed
-- Task claiming is convention-based — the coordinator (this command) is the sole dispatcher
+- Task claiming is convention-based via plan comments — the coordinator (this command) is the sole dispatcher
+- Completed tasks are identified by the presence of `linkedCommit`, not by a status field

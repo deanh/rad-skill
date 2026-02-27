@@ -148,15 +148,12 @@ When tasks have `radicle_plan_id` and `radicle_plan_task_id` metadata, also sync
 
 1. **Group tasks by Plan** using `radicle_plan_id` metadata
 
-2. **Update Plan COB task statuses**:
-   - For completed Claude Code tasks, mark corresponding Plan COB tasks as completed:
+2. **Link commits to Plan COB tasks**:
+   - For completed Claude Code tasks, link the implementing commit to the plan task (marks it done):
    ```bash
-   rad-plan task complete <plan-id> <plan-task-id>
+   rad-plan task link-commit <plan-id> <plan-task-id> --commit <commit-oid>
    ```
-   - For in-progress Claude Code tasks, mark as in-progress:
-   ```bash
-   rad-plan task start <plan-id> <plan-task-id>
-   ```
+   - The commit OID should come from the task metadata or git log
 
 3. **Update Plan status** when all tasks complete:
    ```bash
