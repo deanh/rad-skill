@@ -256,6 +256,25 @@ When all tasks have `linkedCommit`:
 | Comment | Any user |
 | Label/Assign | Delegates only |
 
+## Multi-Agent Orchestration
+
+Plans are the primary coordination layer for the multi-agent worktree workflow:
+
+- **`/rad-orchestrate <plan-id>`** (pi extension) — Automated dispatch loop that creates worktrees, spawns worker subagents, and manages the full plan lifecycle
+- Workers claim tasks via plan comments (`CLAIM task:<id>`), signal file scope changes (`SIGNAL task:<id> files-added:<paths>`), and mark completion via `task link-commit`
+- The orchestrator creates **one Radicle patch per plan** at completion — workers produce commits only
+- Task branches are merged with `--no-ff` (merge commits include task IDs for traceability)
+- Context COBs created by workers feed back into the orchestrator's dispatch decisions
+
+### Key Plan Fields for Orchestration
+
+- **`affectedFiles`** on each task — used for file conflict detection between parallel workers
+- **`blocked_by`** — dependency ordering; a task is ready only when all dependencies have `linkedCommit`
+- **`linkedCommit`** — the sole indicator that a task is complete
+- **Discussion thread** — carries CLAIM/SIGNAL conventions for in-flight coordination
+
+See `agents-cobs-worktrees.md` for the full design and `.pi/extensions/rad-orchestrator.ts` for the implementation.
+
 ## Related Commands
 
 - `/rad-import` - Import issues, optionally create plans

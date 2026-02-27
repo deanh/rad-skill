@@ -39,7 +39,7 @@ This agent activates when:
 - User wants to sync task progress to Radicle
 - User wants to convert plan tasks to issues
 - User asks about plan status or progress
-- User wants to dispatch tasks to workers (`/rad-dispatch`)
+- User wants to dispatch tasks to workers (`/rad-orchestrate`)
 
 ## Workflow: Create Plan from Plan Mode
 
@@ -251,7 +251,7 @@ rad-plan link <plan-id> --issue <new-issue-id>
 
 ## Workflow: Dispatch Tasks to Workers
 
-When the user runs `/rad-dispatch <plan-id>`, analyze the plan and identify which tasks can be dispatched to workers in parallel worktrees.
+When the user runs `/rad-orchestrate <plan-id>`, the pi extension handles worktree creation, worker spawning, and completion. The plan-manager can also analyze dispatch readiness independently:
 
 ### 1. Read Plan State
 
@@ -406,5 +406,5 @@ Based on the aggregated context:
 ## Dispatch Limitations
 
 - **Convention-based claiming**: Task claiming uses plan comments (`CLAIM task:<id>`) as a convention, not an atomic lock. The coordinator (this agent) is the sole dispatcher — it controls which task IDs go to which workers. Workers should not self-select tasks.
-- **No automated monitoring**: Each `/rad-dispatch` invocation is a snapshot. The human runs it between batches to see updated state.
+- **Automated orchestration**: `/rad-orchestrate` runs as a loop in the pi extension, creating worktrees and spawning workers automatically. The plan-manager's dispatch analysis is available as a standalone capability for inspection.
 - **File conflict detection is advisory**: Based on `affectedFiles` which may be incomplete. Workers signal scope changes via plan comments and `task edit --files`, but there is a window where parallel workers may not see each other's signals.

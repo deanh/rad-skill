@@ -204,6 +204,31 @@ The `--json` input is strict:
 - **`title`, `description`, and `approach` are required** — empty values produce a hard error with guidance
 - Agents can self-correct from the error messages
 
+## Multi-Agent Orchestration
+
+Context COBs are the observation layer in the multi-agent worktree workflow:
+
+- Each worker creates **one Context COB per task** capturing approach, constraints, friction, learnings, open items, verification results, and files touched
+- The **`taskId`** field links the context back to its Plan COB task
+- The orchestrator reads Context COBs between dispatch batches to evaluate feedback:
+  - **Constraints** that conflict with remaining tasks trigger warnings
+  - **Open items** suggesting new scope are surfaced for human decision
+  - **Friction** relevant to upcoming tasks' affected files is flagged
+  - **Verification failures** may block dependent tasks
+- COBs live in `~/.radicle/storage/` — accessible from any worktree without sync
+- Context COBs form a complete observational record of how a feature was built across multiple agents
+
+### Worker Context Protocol
+
+Workers link their Context COB to the plan and issue:
+```bash
+rad-context link <context-id> --plan <plan-id>
+rad-context link <context-id> --issue <issue-id>
+rad-context link <context-id> --commit <commit-oid>
+```
+
+See `.pi/agents/rad-worker.md` for the full worker protocol and `.pi/extensions/rad-orchestrator.ts` for the orchestrator's context evaluation logic.
+
 ## Claude Code Integration
 
 - `/rad-context create` — Primary creation mechanism (Claude reflects on session)
