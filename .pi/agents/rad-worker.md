@@ -154,13 +154,15 @@ If you have an issue ID:
 rad-context link <context-id> --issue <issue-id>
 ```
 
-### 4. Mark task complete
+### 4. Signal completion
 
-Link your commit to the plan task — this sets `linkedCommit`, marking the task as done:
+Post a DONE comment to the plan thread with your commit OID. The orchestrator will cherry-pick your commit and call `link-commit` after verifying the merge.
 
 ```bash
-rad-plan task link-commit <plan-id> <task-id> --commit <commit-oid>
+rad-plan comment <plan-id> "DONE task:<task-id> commit:<commit-oid>"
 ```
+
+**Do NOT** call `rad-plan task link-commit` — the orchestrator handles that after cherry-picking your commit into the plan branch.
 
 ### 5. Announce
 
@@ -174,6 +176,7 @@ rad sync --announce
 - **Do NOT** work on tasks other than your assigned `task-id`
 - **Do NOT** close or change the status of issues
 - **Do NOT** push Radicle patches — the orchestrator handles patch creation
+- **Do NOT** call `rad-plan task link-commit` — the orchestrator links commits after cherry-picking
 - **Do NOT** modify code in files that belong to other in-progress tasks
 - **DO** signal file scope changes immediately via plan comment and `task edit --files`
 - **DO** create exactly one commit and one Context COB

@@ -7,14 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-02-27
+
 ### Added
 
 - pi orchestrator extension (`.pi/extensions/rad-orchestrator.ts`) — `/rad-orchestrate <plan-id>` command for automated multi-agent task execution across worktrees
 - pi worker agent (`.pi/agents/rad-worker.md`) — subagent definition for executing single Plan COB tasks in isolated worktrees
-- One-patch-per-plan model: workers produce commits only, orchestrator merges with `--no-ff` and creates a single Radicle patch at completion
+- One-patch-per-plan model: workers produce commits only, orchestrator cherry-picks and creates a single Radicle patch at completion
+- Worker DONE protocol: workers post `DONE task:<id> commit:<sha>` comments; orchestrator parses these to drive cherry-pick and link-commit
+- REJECTED comment protocol: orchestrator posts `REJECTED task:<id> reason:<msg>` on cherry-pick failure
+- `workerDone` state in plan analysis — tasks signaled done by workers but not yet cherry-picked into the plan branch
+- `baseCommit` tracking: orchestrator records HEAD at dispatch time so the plan branch is created from a stable base
+- Implementation plan document (`PLAN-pi-multi-agent-worktrees.md`) covering the full multi-agent worktree architecture
 
 ### Changed
 
+- Plugin version bumped to 0.7.0
+- Orchestrator completion switched from `git merge --no-ff` to `git cherry-pick` for cleaner plan branches
+- Orchestrator creates plan branch from recorded base commit instead of current HEAD
+- Orchestrator collects worker commit SHAs both from subprocess output and DONE comments (dual-source with fallback)
+- Orchestrator `link-commit` now uses the cherry-picked SHA (not the worker's original) for accurate plan-branch references
+- Dispatch report labels: "Landed" for linked tasks, "Worker Done (awaiting cherry-pick)" for DONE-signaled tasks
+- Worker agent: posts DONE comment instead of calling `rad-plan task link-commit` directly
+- Stricter error handling in `completePlan`: patch push failure, missing patch ID, and patch verification all throw with context
+- On completion failure, orchestrator returns to previous branch and preserves worktrees for manual recovery
 - Update all skill files for `rad-plan` v0.2.0: `task start`/`task complete` replaced with `task link-commit`, CLAIM comment convention for in-progress signaling, correct JSON field names (`affectedFiles`, `linkedCommit`), short-form ID support
 - Update `rad-context` docs for upstream CLI changes: `verification` field, `taskId` field, JSON validation, short-form IDs, `--no-auto-files` and `--auto-link-commits` flags
 - Worker agent (`agents/worker.md`): removed per-worker patch pushing — workers produce commits and Context COBs only
@@ -127,6 +143,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README with installation instructions (global and project-local)
 
 [Unreleased]: https://app.radicle.xyz/nodes/seed.radicle.xyz/rad:zvBj4kByGeQSrSy2c4H7fyK42cS8/commits/main
+[0.7.0]: https://app.radicle.xyz/nodes/seed.radicle.xyz/rad:zvBj4kByGeQSrSy2c4H7fyK42cS8/commits/main
 [0.6.0]: https://app.radicle.xyz/nodes/seed.radicle.xyz/rad:zvBj4kByGeQSrSy2c4H7fyK42cS8/commits/3f68c8c
 [0.5.0]: https://app.radicle.xyz/nodes/seed.radicle.xyz/rad:zvBj4kByGeQSrSy2c4H7fyK42cS8/commits/c982900
 [0.4.0]: https://app.radicle.xyz/nodes/seed.radicle.xyz/rad:zvBj4kByGeQSrSy2c4H7fyK42cS8/commits/4e40ddb

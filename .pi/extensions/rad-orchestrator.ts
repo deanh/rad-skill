@@ -34,9 +34,15 @@ interface Plan {
   };
 }
 
+interface WorkerDoneTask {
+  task: PlanTask;
+  commitSha: string;
+}
+
 interface PlanState {
   plan: Plan;
   completed: PlanTask[];
+  workerDone: WorkerDoneTask[];
   inProgress: PlanTask[];
   ready: PlanTask[];
   blockedDep: PlanTask[];
@@ -64,6 +70,7 @@ interface WorkerResult {
   worktreePath: string;
   turns: number;
   cost: number;
+  commitSha: string | null;
 }
 
 interface WorkerProgress {
@@ -124,6 +131,15 @@ function findClaimedTaskIds(plan: Plan): Set<string> {
     if (match) claimed.add(match[1]);
   }
   return claimed;
+}
+
+function findDoneTaskCommits(plan: Plan): Map<string, string> {
+  const done = new Map<string, string>();
+  for (const body of getCommentBodies(plan)) {
+    const match = body.match(/^DONE task:(\S+) commit:(\S+)/);
+    if (match) done.set(match[1], match[2]);
+  }
+  return done;
 }
 
 function findSignalFiles(plan: Plan): Map<string, string[]> {
@@ -190,9 +206,11 @@ async function analyzePlan(pi: ExtensionAPI, planId: string): Promise<PlanState 
   if (!plan) return null;
 
   const claimed = findClaimedTaskIds(plan);
+  const doneCommits = findDoneTaskCommits(plan);
   const signals = findSignalFiles(plan);
 
   const completed: PlanTask[] = [];
+  const workerDone: WorkerDoneTask[] = [];
   const inProgress: PlanTask[] = [];
   const ready: PlanTask[] = [];
   const blockedDep: PlanTask[] = [];
@@ -208,8 +226,24 @@ async function analyzePlan(pi: ExtensionAPI, planId: string): Promise<PlanState 
     }
   }
 
+  // Second pass: find worker-done tasks (DONE comment but no linkedCommit)
+  const workerDoneIds = new Set<string>();
   for (const task of plan.tasks) {
     if (task.linkedCommit) continue;
+    const sha = doneCommits.get(shortId(task.id)) ?? doneCommits.get(task.id);
+    if (sha) {
+      workerDone.push({ task, commitSha: sha });
+      workerDoneIds.add(task.id);
+      workerDoneIds.add(shortId(task.id));
+      // Treat worker-done as completed for dependency resolution
+      completedIds.add(task.id);
+      completedIds.add(shortId(task.id));
+    }
+  }
+
+  for (const task of plan.tasks) {
+    if (task.linkedCommit) continue;
+    if (workerDoneIds.has(task.id) || workerDoneIds.has(shortId(task.id))) continue;
 
     // Check if claimed (in progress)
     if (claimed.has(shortId(task.id)) || claimed.has(task.id)) {
@@ -245,11 +279,12 @@ async function analyzePlan(pi: ExtensionAPI, planId: string): Promise<PlanState 
   return {
     plan,
     completed,
+    workerDone,
     inProgress,
     ready,
     blockedDep,
     blockedFile,
-    allComplete: completed.length === plan.tasks.length,
+    allComplete: (completed.length + workerDone.length) === plan.tasks.length,
     contextFeedback,
   };
 }
@@ -366,6 +401,7 @@ function spawnWorker(
       worktreePath,
       turns: 0,
       cost: 0,
+      commitSha: null,
     };
 
     try {
@@ -513,18 +549,27 @@ async function mapWithConcurrency<T, R>(
 // --- Formatting ---
 
 function formatDispatchReport(state: PlanState): string {
-  const total = state.plan.tasks.length;
   const lines: string[] = [];
 
   lines.push(`Dispatch: "${state.plan.title}"`);
   lines.push("═".repeat(50));
-  lines.push(`Status: ${state.completed.length}/${total} completed | ${state.inProgress.length} in progress | ${state.ready.length} ready | ${state.blockedDep.length + state.blockedFile.length} blocked`);
+  const landed = state.completed.length;
+  const done = state.workerDone.length;
+  lines.push(`Status: ${landed} landed, ${done} awaiting merge | ${state.inProgress.length} in progress | ${state.ready.length} ready | ${state.blockedDep.length + state.blockedFile.length} blocked`);
   lines.push("");
 
   if (state.completed.length > 0) {
-    lines.push("── Completed ──");
+    lines.push("── Landed ──");
     for (const t of state.completed) {
       lines.push(`  ✓ ${shortId(t.id)}: "${t.subject}" — ${shortId(t.linkedCommit!)}`);
+    }
+    lines.push("");
+  }
+
+  if (state.workerDone.length > 0) {
+    lines.push("── Worker Done (awaiting cherry-pick) ──");
+    for (const wd of state.workerDone) {
+      lines.push(`  ◆ ${shortId(wd.task.id)}: "${wd.task.subject}" — ${shortId(wd.commitSha)}`);
     }
     lines.push("");
   }
@@ -646,39 +691,64 @@ async function completePlan(
   pi: ExtensionAPI,
   planId: string,
   state: PlanState,
+  workerCommits: Map<string, string>,
+  baseCommit: string,
   worktreePaths: string[],
-): Promise<{ patchId: string | null }> {
-  // Merge task branches into a plan branch
+): Promise<{ patchId: string }> {
+  // Create plan branch from the dispatch-time base commit
   const planBranch = `plan/${shortId(planId)}`;
-  await pi.exec("git", ["checkout", "-b", planBranch], { timeout: 10000 });
+  await pi.exec("git", ["checkout", "-b", planBranch, baseCommit], { timeout: 10000 });
 
-  for (const task of state.completed) {
-    // Merge by commit SHA (from linkedCommit) rather than branch name,
-    // since task branches may have been cleaned up during retries.
-    const mergeRef = task.linkedCommit!;
-    const mergeResult = await pi.exec("git", [
-      "merge", mergeRef, "--no-ff",
-      "-m", `Merge task ${shortId(task.id)}: ${task.subject}`,
+  // Cherry-pick each worker-done task's commit sequentially
+  for (const wd of state.workerDone) {
+    // Use orchestrator-collected SHA (primary) or DONE comment SHA (fallback)
+    const commitSha = workerCommits.get(wd.task.id) ?? wd.commitSha;
+    const pickResult = await pi.exec("git", [
+      "cherry-pick", commitSha,
     ], { timeout: 30000 });
 
-    if (mergeResult.code !== 0) {
-      // Try to abort the merge and report
-      await pi.exec("git", ["merge", "--abort"], { timeout: 5000 });
-      throw new Error(`Merge conflict on task ${shortId(task.id)}: ${mergeResult.stderr}`);
+    if (pickResult.code !== 0) {
+      await pi.exec("git", ["cherry-pick", "--abort"], { timeout: 5000 });
+      // Post REJECTED comment so the failure is visible in the plan thread
+      const reason = (pickResult.stderr || "unknown error").split("\n")[0].slice(0, 200);
+      await pi.exec("rad-plan", [
+        "comment", planId,
+        `REJECTED task:${shortId(wd.task.id)} reason:${reason}`,
+      ], { timeout: 10000 });
+      throw new Error(`Cherry-pick failed for task ${shortId(wd.task.id)}: ${reason}`);
     }
+
+    // Link the cherry-picked commit (new SHA, not the worker's original)
+    const newShaResult = await pi.exec("git", ["rev-parse", "HEAD"], { timeout: 5000 });
+    const newSha = newShaResult.stdout.trim();
+    await pi.exec("rad-plan", [
+      "task", "link-commit", planId, wd.task.id, "--commit", newSha,
+    ], { timeout: 10000 });
   }
 
   // Push the Radicle patch
   const pushResult = await pi.exec("git", ["push", "rad", "HEAD:refs/patches"], { timeout: 30000 });
+  if (pushResult.code !== 0) {
+    const preview = (pushResult.stderr || pushResult.stdout).split("\n").slice(0, 3).join("\n");
+    throw new Error(`Patch push failed (exit ${pushResult.code}): ${preview}`);
+  }
   const pushOutput = (pushResult.stdout + "\n" + pushResult.stderr).trim();
   const patchIdMatch = pushOutput.match(/([0-9a-f]{40})/);
-  const patchId = patchIdMatch?.[1] ?? null;
+  if (!patchIdMatch) {
+    throw new Error(`Patch push succeeded but no patch ID found in output: ${pushOutput.slice(0, 200)}`);
+  }
+  const patchId = patchIdMatch[1];
 
-  if (patchId) {
-    await pi.exec("rad-plan", ["link", planId, "--patch", patchId], { timeout: 10000 });
+  // Verify patch exists
+  const verifyResult = await pi.exec("rad", ["patch", "show", patchId], { timeout: 10000 });
+  if (verifyResult.code !== 0) {
+    throw new Error(`Patch ${shortId(patchId)} pushed but verification failed: ${verifyResult.stderr}`);
   }
 
-  // Close plan
+  // Link patch to plan
+  await pi.exec("rad-plan", ["link", planId, "--patch", patchId], { timeout: 10000 });
+
+  // Close plan — only after verified patch
   await pi.exec("rad-plan", ["status", planId, "completed"], { timeout: 10000 });
 
   // Close linked issues
@@ -771,6 +841,10 @@ export default function (pi: ExtensionAPI) {
 
       // Track all worktree paths for cleanup
       const allWorktreePaths: string[] = [];
+      // Collect worker commit SHAs (taskId -> commitSha)
+      const workerCommits = new Map<string, string>();
+      // Record HEAD at dispatch time so completePlan branches from the same base
+      let baseCommit: string | null = null;
 
       // Live progress tracking
       const workerProgress = new Map<string, WorkerProgress>();
@@ -787,7 +861,7 @@ export default function (pi: ExtensionAPI) {
 
         // Also update footer status
         const active = [...workerProgress.values()].filter(w => w.status === "running" || w.status === "starting").length;
-        const done = planState.completed.length + [...workerProgress.values()].filter(w => w.status === "done").length;
+        const done = planState.completed.length + planState.workerDone.length + [...workerProgress.values()].filter(w => w.status === "done").length;
         const total = planState.plan.tasks.length;
         ctx.ui.setStatus("rad-orchestrator", `⚙ ${done}/${total} tasks [${active} active]`);
       };
@@ -818,24 +892,31 @@ export default function (pi: ExtensionAPI) {
         if (planState.allComplete) {
           // Phase 3: Completion
           cleanupDashboard();
+          const taskCount = planState.workerDone.length + planState.completed.length;
           const proceed = await ctx.ui.confirm(
             "All tasks complete",
-            `Merge ${planState.completed.length} task branches, create patch, and close the plan?`,
+            `Cherry-pick ${planState.workerDone.length} worker commit(s), create patch, and close the plan?`,
           );
           if (!proceed) break;
 
-          ctx.ui.setStatus("rad-orchestrator", "⚙ merging and creating patch…");
+          ctx.ui.setStatus("rad-orchestrator", "⚙ cherry-picking and creating patch…");
           try {
-            const { patchId } = await completePlan(pi, planId, planState, allWorktreePaths);
+            const { patchId } = await completePlan(
+              pi, planId, planState, workerCommits, baseCommit!, allWorktreePaths,
+            );
             ctx.ui.setStatus("rad-orchestrator", undefined);
-            if (patchId) {
-              ctx.ui.notify(`✓ Patch created: ${shortId(patchId)}`, "info");
-            }
-            ctx.ui.notify("✓ Plan completed and announced", "info");
+            ctx.ui.notify(`✓ Patch created: ${shortId(patchId)}`, "info");
+            ctx.ui.notify(`✓ Plan completed: ${taskCount} tasks landed and announced`, "info");
           } catch (err) {
             ctx.ui.setStatus("rad-orchestrator", undefined);
             const msg = err instanceof Error ? err.message : String(err);
             ctx.ui.notify(`Completion failed: ${msg}`, "error");
+            ctx.ui.notify(
+              `Plan left open. Worktrees preserved. Fix the issue and re-run /rad-orchestrate ${shortId(planId)}`,
+              "warning",
+            );
+            // Return to previous branch so repo isn't left on plan/<id>
+            await pi.exec("git", ["checkout", "-"], { timeout: 10000 });
           }
           break;
         }
@@ -872,6 +953,12 @@ export default function (pi: ExtensionAPI) {
         const tasksToDispatch = choice === "Dispatch one"
           ? [planState.ready[0]]
           : planState.ready;
+
+        // Record base commit before creating worktrees (first batch only)
+        if (!baseCommit) {
+          const headResult = await pi.exec("git", ["rev-parse", "HEAD"], { timeout: 5000 });
+          baseCommit = headResult.stdout.trim();
+        }
 
         // Create worktrees and spawn workers
         ctx.ui.notify(`Creating ${tasksToDispatch.length} worktree(s)...`, "info");
@@ -934,6 +1021,18 @@ export default function (pi: ExtensionAPI) {
               },
             );
 
+            // Collect commit SHA from worker's worktree
+            if (result.success) {
+              try {
+                const shaResult = await pi.exec("git", [
+                  "-C", worktreePath, "rev-parse", "HEAD",
+                ], { timeout: 5000 });
+                if (shaResult.code === 0) {
+                  result.commitSha = shaResult.stdout.trim();
+                }
+              } catch { /* worktree may already be gone */ }
+            }
+
             // Update final progress state
             progress.status = result.success ? "done" : "failed";
             progress.turns = result.turns;
@@ -955,6 +1054,13 @@ export default function (pi: ExtensionAPI) {
         // Report results
         const succeeded = results.filter(r => r.success);
         const failed = results.filter(r => !r.success);
+
+        // Collect commit SHAs from successful workers
+        for (const r of succeeded) {
+          if (r.commitSha) {
+            workerCommits.set(r.taskId, r.commitSha);
+          }
+        }
 
         ctx.ui.notify(`\nBatch complete: ${succeeded.length} succeeded, ${failed.length} failed`, "info");
         if (failed.length > 0) {

@@ -1,6 +1,6 @@
 {
   "name": "radicle",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Claude Code plugin for Radicle - a peer-to-peer code collaboration protocol with task integration, Plan COB, and Context COB support",
   "skills": [
     "./skills/radicle/SKILL.md",
