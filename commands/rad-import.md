@@ -172,14 +172,14 @@ When `--dispatch` is passed (implies `--save-plan`), after creating the Plan COB
 ```bash
 rad-plan status <plan-id> approved
 ```
-3. **Run dispatch analysis** — categorize tasks as Ready, Blocked (dependency), or Blocked (file conflict) using the same logic as `/rad-dispatch`:
+3. **Run dispatch analysis** — categorize tasks as Ready, Blocked (dependency), or Blocked (file conflict) using the same logic as `/rad-orchestrate`:
    - Ready: pending, all dependencies met, no file overlap with in-progress tasks
    - Blocked: pending, has unmet dependencies or file conflicts
 4. **Present dispatch instructions** for each ready task, including:
    - Task ID, subject, affected files
    - Suggested worktree name
    - Worker launch guidance
-5. **Inform the user** they can re-run `/rad-dispatch <plan-id>` after workers complete to see the next batch
+5. **Inform the user** they can run `/rad-orchestrate <plan-id>` to automate worker dispatch across worktrees
 
 ## Notes
 
@@ -188,4 +188,4 @@ rad-plan status <plan-id> approved
 - Use `/rad-status` to view progress across all imported issues
 - Use `/rad-sync` when tasks are complete to update the Radicle issue
 - Use `/rad-plan sync` to sync task completion to Plan COBs
-- Use `/rad-dispatch` to see which tasks are ready for parallel worker execution
+- Use `/rad-orchestrate` to automate worker dispatch across worktrees

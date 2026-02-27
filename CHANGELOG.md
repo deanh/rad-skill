@@ -7,10 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- pi orchestrator extension (`.pi/extensions/rad-orchestrator.ts`) — `/rad-orchestrate <plan-id>` command for automated multi-agent task execution across worktrees
+- pi worker agent (`.pi/agents/rad-worker.md`) — subagent definition for executing single Plan COB tasks in isolated worktrees
+- One-patch-per-plan model: workers produce commits only, orchestrator merges with `--no-ff` and creates a single Radicle patch at completion
+
 ### Changed
 
 - Update all skill files for `rad-plan` v0.2.0: `task start`/`task complete` replaced with `task link-commit`, CLAIM comment convention for in-progress signaling, correct JSON field names (`affectedFiles`, `linkedCommit`), short-form ID support
 - Update `rad-context` docs for upstream CLI changes: `verification` field, `taskId` field, JSON validation, short-form IDs, `--no-auto-files` and `--auto-link-commits` flags
+- Worker agent (`agents/worker.md`): removed per-worker patch pushing — workers produce commits and Context COBs only
+- Design doc (`agents-cobs-worktrees.md`): removed reviewer agent (deferred), moved patches to coordinator level, updated information flow diagram
+- Plan-manager agent: `/rad-dispatch` references updated to `/rad-orchestrate`
+
+### Removed
+
+- `/rad-dispatch` command (`commands/rad-dispatch.md`) — replaced by `/rad-orchestrate` in the pi orchestrator extension
+- Reviewer agent concept — deferred until worker loop is proven
 
 ## [0.6.0] - 2026-02-24
 
@@ -19,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Worker agent (`agents/worker.md`) for executing Plan COB tasks in isolated worktrees — one commit, one patch, one Context COB per task
 - Plan-manager dispatch workflow for identifying tasks ready for parallel execution across worktrees
 - `/rad-dispatch` command for analyzing Plan COBs and outputting dispatch instructions
-- Multi-agent coordination design doc (`agents-cobs-worktrees.md`) covering coordinator, worker, and reviewer roles
+- Multi-agent coordination design doc (`agents-cobs-worktrees.md`) covering coordinator and worker roles
 - SIGNAL comment convention for workers to report file scope changes mid-execution
 - CLAIM comment convention for task assignment in the absence of atomic status
 
