@@ -294,6 +294,28 @@ async function loadContextFeedback(pi: ExtensionAPI, planId: string): Promise<Co
   return feedback;
 }
 
+// --- Failure Logging ---
+
+function writeFailureLog(planId: string, result: WorkerResult): string {
+  const dir = path.join(require("node:os").tmpdir(), "rad-orchestrator", shortId(planId));
+  fs.mkdirSync(dir, { recursive: true });
+  const logPath = path.join(dir, `${shortId(result.taskId)}.log`);
+  const lines = [
+    `Task: ${result.taskId}`,
+    `Subject: ${result.taskSubject}`,
+    `Exit code: ${result.exitCode}`,
+    `Turns: ${result.turns}`,
+    `Cost: ${result.cost > 0 ? `$${result.cost.toFixed(4)}` : "n/a"}`,
+    `Worktree: ${result.worktreePath}`,
+    `Timestamp: ${new Date().toISOString()}`,
+    "",
+    "--- stderr ---",
+    result.stderr || "(empty)",
+  ];
+  fs.writeFileSync(logPath, lines.join("\n"), "utf-8");
+  return logPath;
+}
+
 // --- Worktree Lifecycle ---
 
 async function createWorktree(pi: ExtensionAPI, cwd: string, taskId: string, slug: string): Promise<string> {
@@ -309,6 +331,12 @@ async function createWorktree(pi: ExtensionAPI, cwd: string, taskId: string, slu
 
 async function removeWorktree(pi: ExtensionAPI, worktreePath: string): Promise<void> {
   await pi.exec("git", ["worktree", "remove", worktreePath, "--force"], { timeout: 15000 });
+}
+
+async function teardownWorktree(pi: ExtensionAPI, taskId: string, worktreePath: string): Promise<void> {
+  await removeWorktree(pi, worktreePath);
+  const branch = `task/${shortId(taskId)}`;
+  await pi.exec("git", ["branch", "-D", branch], { timeout: 10000 });
 }
 
 // --- Subagent Spawning ---
@@ -625,9 +653,11 @@ async function completePlan(
   await pi.exec("git", ["checkout", "-b", planBranch], { timeout: 10000 });
 
   for (const task of state.completed) {
-    const taskBranch = `task/${shortId(task.id)}`;
+    // Merge by commit SHA (from linkedCommit) rather than branch name,
+    // since task branches may have been cleaned up during retries.
+    const mergeRef = task.linkedCommit!;
     const mergeResult = await pi.exec("git", [
-      "merge", taskBranch, "--no-ff",
+      "merge", mergeRef, "--no-ff",
       "-m", `Merge task ${shortId(task.id)}: ${task.subject}`,
     ], { timeout: 30000 });
 
@@ -928,17 +958,104 @@ export default function (pi: ExtensionAPI) {
 
         ctx.ui.notify(`\nBatch complete: ${succeeded.length} succeeded, ${failed.length} failed`, "info");
         if (failed.length > 0) {
-          ctx.ui.notify(formatWorkerResults(failed), "error");
+          // Write failure logs and show results
+          for (const f of failed) {
+            const logPath = writeFailureLog(planId, f);
+            ctx.ui.notify(`  ✗ ${shortId(f.taskId)}: "${f.taskSubject}" — log: ${logPath}`, "error");
+            if (f.stderr) {
+              const preview = f.stderr.split("\n").filter(l => l.trim()).slice(0, 3).join("\n    ");
+              ctx.ui.notify(`    ${preview}`, "error");
+            }
+          }
 
+          const retryTasks: WorkerResult[] = [];
           for (const f of failed) {
             const action = await ctx.ui.select(
-              `Task ${shortId(f.taskId)} failed. Action?`,
-              ["Skip (continue with next batch)", "Stop orchestration"],
+              `Task ${shortId(f.taskId)} failed (exit ${f.exitCode}). Action?`,
+              ["Retry", "Skip (continue with next batch)", "Stop orchestration"],
             );
             if (action === "Stop orchestration") {
               cleanupDashboard();
               ctx.ui.notify("Orchestration stopped by user.", "info");
               return;
+            }
+            if (action === "Retry") {
+              retryTasks.push(f);
+            }
+          }
+
+          // Tear down failed worktrees and re-dispatch retries
+          if (retryTasks.length > 0) {
+            for (const f of retryTasks) {
+              try {
+                await teardownWorktree(pi, f.taskId, f.worktreePath);
+                // Remove from allWorktreePaths
+                const idx = allWorktreePaths.indexOf(f.worktreePath);
+                if (idx >= 0) allWorktreePaths.splice(idx, 1);
+              } catch {
+                ctx.ui.notify(`  ⚠ Could not clean up worktree for ${shortId(f.taskId)}`, "warning");
+              }
+            }
+
+            // Find the original task objects for retry
+            const retryTaskIds = new Set(retryTasks.map(r => r.taskId));
+            const planState = await analyzePlan(pi, planId);
+            if (planState) {
+              const tasksToRetry = planState.plan.tasks.filter(t => retryTaskIds.has(t.id));
+              ctx.ui.notify(`Retrying ${tasksToRetry.length} task(s)…`, "info");
+
+              for (const task of tasksToRetry) {
+                try {
+                  const wt = await createWorktree(pi, ctx.cwd, task.id, slugify(task.subject));
+                  allWorktreePaths.push(wt);
+
+                  workerProgress.set(task.id, {
+                    taskId: task.id,
+                    taskSubject: task.subject,
+                    status: "starting",
+                    turns: 0,
+                    cost: 0,
+                    currentTool: null,
+                    lastActivity: null,
+                    startTime: Date.now(),
+                  });
+
+                  updateDashboard(planState);
+
+                  const progress = workerProgress.get(task.id)!;
+                  progress.status = "running";
+
+                  const retryResult = await spawnWorker(
+                    workerAgent,
+                    wt,
+                    planId,
+                    task,
+                    (update) => {
+                      Object.assign(progress, update);
+                      updateDashboard(currentPlanState);
+                    },
+                  );
+
+                  progress.status = retryResult.success ? "done" : "failed";
+                  progress.turns = retryResult.turns;
+                  progress.cost = retryResult.cost;
+                  progress.currentTool = null;
+                  progress.lastActivity = retryResult.success ? "completed" : `exit code ${retryResult.exitCode}`;
+                  updateDashboard(currentPlanState);
+
+                  if (retryResult.success) {
+                    ctx.ui.notify(`  ✓ ${shortId(task.id)}: retry succeeded`, "info");
+                  } else {
+                    const retryLogPath = writeFailureLog(planId, retryResult);
+                    ctx.ui.notify(`  ✗ ${shortId(task.id)}: retry failed — log: ${retryLogPath}`, "error");
+                  }
+                } catch (err) {
+                  const msg = err instanceof Error ? err.message : String(err);
+                  ctx.ui.notify(`  ✗ ${shortId(task.id)}: retry setup failed: ${msg}`, "error");
+                }
+
+                workerProgress.delete(task.id);
+              }
             }
           }
         }
