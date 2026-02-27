@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-02-27
+
+### Changed
+
+- Moved `commands/` and `agents/` under `.claude-plugin/` for cleaner platform separation — shared skills remain at repo root, platform-specific code lives under `.claude-plugin/` (Claude Code) and `.pi/` (pi)
+- Updated `plugin.json` paths to reflect new locations
+- Removed dangling `commands/rad-dispatch.md` reference from `plugin.json` (file was deleted in v0.7.0)
+- Updated README: replaced `/rad-dispatch` with `/rad-orchestrate`, documented pi orchestrator and worker agent, added pi installation for orchestrator extension and agents
+
 ## [0.7.0] - 2026-02-27
 
 ### Added
@@ -143,7 +152,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README with installation instructions (global and project-local)
 
 [Unreleased]: https://app.radicle.xyz/nodes/seed.radicle.xyz/rad:zvBj4kByGeQSrSy2c4H7fyK42cS8/commits/main
-[0.7.0]: https://app.radicle.xyz/nodes/seed.radicle.xyz/rad:zvBj4kByGeQSrSy2c4H7fyK42cS8/commits/main
+[0.7.1]: https://app.radicle.xyz/nodes/seed.radicle.xyz/rad:zvBj4kByGeQSrSy2c4H7fyK42cS8/commits/main
+[0.7.0]: https://app.radicle.xyz/nodes/seed.radicle.xyz/rad:zvBj4kByGeQSrSy2c4H7fyK42cS8/commits/d2a2b3c
 [0.6.0]: https://app.radicle.xyz/nodes/seed.radicle.xyz/rad:zvBj4kByGeQSrSy2c4H7fyK42cS8/commits/3f68c8c
 [0.5.0]: https://app.radicle.xyz/nodes/seed.radicle.xyz/rad:zvBj4kByGeQSrSy2c4H7fyK42cS8/commits/c982900
 [0.4.0]: https://app.radicle.xyz/nodes/seed.radicle.xyz/rad:zvBj4kByGeQSrSy2c4H7fyK42cS8/commits/4e40ddb

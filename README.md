@@ -8,7 +8,7 @@ A skill package for working with [Radicle](https://radicle.xyz) — a peer-to-pe
 - **Issues to Plans and Tasks**: Break down Radicle issues into actionable work items with optional plan mode
 - **Plan COBs**: Save implementation plans as Radicle Collaborative Objects (`me.hdh.plan`)
 - **Context COBs**: Capture session observations as durable records (`me.hdh.context`) for future sessions and collaborators
-- **Worktree Dispatch**: Coordinate parallel task execution across git worktrees using COBs as shared state
+- **Multi-Agent Orchestration**: Coordinate parallel task execution across git worktrees using COBs as shared state, with automated orchestration on pi
 - **Bidirectional Sync**: Import issues as tasks with automatic rollup on sync (Claude Code)
 - **Context Loading**: Load full issue/patch context including discussion history and prior session observations
 - **Session Awareness**: Detect Radicle repos and surface relevant information at session start
@@ -21,13 +21,13 @@ A skill package for working with [Radicle](https://radicle.xyz) — a peer-to-pe
 | `/rad-context` command | ✓ (markdown) | ✓ (extension) |
 | `/rad-import`, `/rad-sync`, `/rad-status` commands | ✓ | — |
 | `/rad-plan`, `/rad-issue` commands | ✓ | — |
-| `/rad-dispatch` command | ✓ | — |
+| `/rad-orchestrate` (multi-agent worktree orchestration) | — | ✓ (extension) |
 | Session start detection | ✓ (hook) | ✓ (extension) |
 | Compaction-triggered context creation | — | ✓ (extension) |
 | Shutdown reminder | ✓ (hook) | ✓ (extension) |
 | Context loader agent | ✓ | — |
 | Plan manager agent (with dispatch) | ✓ | — |
-| Worker agent (worktree execution) | ✓ | — |
+| Worker agent (worktree execution) | ✓ | ✓ (agent) |
 
 Skills follow the [Agent Skills standard](https://agentskills.io) and work on both platforms without modification.
 
@@ -64,21 +64,27 @@ Add to your settings file (`~/.claude/settings.json` for global, `.claude/settin
 
 ### pi
 
-The skills auto-discover from the `skills/` directory. The pi extension auto-discovers from `.pi/extensions/`.
+The skills auto-discover from the `skills/` directory. Extensions and agents auto-discover from `.pi/extensions/` and `.pi/agents/`.
 
 To use in another project, add to `.pi/settings.json`:
 
 ```json
 {
   "skills": ["/path/to/rad-skill/skills"],
-  "extensions": ["/path/to/rad-skill/.pi/extensions/rad-context.ts"]
+  "extensions": [
+    "/path/to/rad-skill/.pi/extensions/rad-context.ts",
+    "/path/to/rad-skill/.pi/extensions/rad-orchestrator.ts"
+  ],
+  "agents": ["/path/to/rad-skill/.pi/agents"]
 }
 ```
 
 Or test directly:
 
 ```bash
-pi -e /path/to/rad-skill/.pi/extensions/rad-context.ts --skill /path/to/rad-skill/skills
+pi -e /path/to/rad-skill/.pi/extensions/rad-context.ts \
+   -e /path/to/rad-skill/.pi/extensions/rad-orchestrator.ts \
+   --skill /path/to/rad-skill/skills
 ```
 
 
@@ -126,35 +132,45 @@ Manage Plan COBs: list, show, create, sync, export.
 
 Manage Context COBs: list, show, create, link.
 
-### `/rad-dispatch <plan-id>`
+## Multi-Agent Worktree Orchestration
 
-Analyze a Plan COB and identify tasks ready for parallel dispatch to workers in worktrees.
+Multiple agents work in parallel git worktrees, using COBs as the shared coordination layer. COBs live in `~/.radicle/storage/` and are visible from all worktrees instantly — code is isolated per worktree, metadata flows freely.
+
+### pi: `/rad-orchestrate <plan-id>`
+
+The pi orchestrator extension automates the full multi-agent lifecycle:
 
 ```
-/rad-dispatch abc123            # Show dispatchable tasks, context feedback
+/rad-orchestrate abc123         # Run plan to completion
 ```
 
-Shows: plan status overview, ready/blocked/in-progress tasks, context feedback from completed workers, and worker launch guidance. Run iteratively between batches.
+1. Analyzes the Plan COB and identifies ready tasks (unblocked, no file conflicts)
+2. Spawns worker agents in isolated worktrees (up to 4 concurrent)
+3. Workers claim tasks, implement, commit, create Context COBs, and post `DONE task:<id> commit:<sha>`
+4. Orchestrator cherry-picks completed commits into a plan branch
+5. Links commits to plan tasks via `rad-plan task link-commit`
+6. Repeats until all tasks are complete, then creates a single Radicle patch
 
-## Worktree Dispatch (Claude Code)
+The orchestrator retries failed workers, logs failures to `/tmp/`, and tracks context feedback from completed workers to inform subsequent batches.
 
-The dispatch workflow coordinates parallel task execution across git worktrees, using COBs as the shared coordination layer. COBs live in `~/.radicle/storage/` and are visible from all worktrees instantly — code is isolated per worktree, metadata flows freely.
+### Claude Code: Manual Dispatch
 
-### Workflow
+On Claude Code, the plan-manager agent handles dispatch interactively:
 
 1. **Import and plan**: `/rad-import <issue-id> --dispatch` creates a Plan COB with tasks
-2. **Dispatch**: `/rad-dispatch <plan-id>` identifies ready tasks (unblocked, no file conflicts with in-progress work)
-3. **Workers**: Launch `claude --worktree` sessions per task — each worker claims a task, implements, produces a commit + patch + Context COB
-4. **Iterate**: Re-run `/rad-dispatch` to see context feedback from completed workers and the next batch of ready tasks
+2. **Dispatch**: Plan-manager identifies ready tasks and provides worker launch instructions
+3. **Workers**: Launch `claude --worktree` sessions per task — each worker claims a task, implements, produces a commit + Context COB
+4. **Iterate**: Re-run dispatch to see context feedback and the next batch of ready tasks
 5. **Complete**: When all tasks pass, close the plan and issue
 
 ### Agents
 
-| Agent | Role | Runs In |
-|-------|------|---------|
-| **plan-manager** | Creates plans, dispatches tasks, evaluates context feedback | Main worktree |
-| **worker** | Executes one task: code, commit, patch, Context COB | Isolated worktree |
-| **context-loader** | Loads issue/patch/context details for other agents | Any worktree |
+| Agent | Role | Platform | Runs In |
+|-------|------|----------|---------|
+| **plan-manager** | Creates plans, dispatches tasks, evaluates context feedback | Claude Code | Main worktree |
+| **rad-worker** | Executes one task: code, commit, Context COB, DONE signal | pi | Isolated worktree |
+| **worker** | Executes one task: code, commit, Context COB | Claude Code | Isolated worktree |
+| **context-loader** | Loads issue/patch/context details for other agents | Claude Code | Any worktree |
 
 ## Task-Issue Mapping (Claude Code)
 
