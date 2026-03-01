@@ -1,6 +1,6 @@
 ---
 name: rad-sync
-description: Sync completed tasks back to Radicle issues with rollup logic
+description: Sync completed tasks back to Radicle issues and Plan COBs with rollup logic
 arguments:
   - name: options
     description: Optional flags like --dry-run to preview without making changes
@@ -10,117 +10,149 @@ user_invocable: true
 
 # Radicle Sync
 
-Synchronize Claude Code task completions back to Radicle issues. Uses rollup logic - an issue is only marked "solved" when ALL linked tasks are completed.
+Syncs session task completions to both Radicle issues and Plan COBs. Uses rollup logic — an issue is only marked "solved" when ALL linked tasks are completed.
 
 ## Instructions
 
-1. **Get all tasks** using the TaskList tool
+### 1. Get all tasks
 
-2. **Group tasks by Radicle issue**:
-   - Filter tasks that have `radicle_issue_id` in their metadata
-   - Group tasks by their `radicle_issue_id`
+Use the `TaskList` tool.
 
-3. **For each issue, calculate completion status**:
-   - Count total tasks linked to this issue
-   - Count completed tasks (status: "completed")
-   - Determine if ALL tasks are complete
+### 2. Group tasks by Radicle issue
 
-4. **Handle dry-run mode** if `--dry-run` is in the arguments:
-   - Show what would be synced without making changes
-   - Display completion percentages per issue
+- Filter tasks that have `radicle_issue_id` in their metadata
+- Group tasks by their `radicle_issue_id`
 
-5. **For fully completed issues** (all tasks done):
-   - Mark the Radicle issue as solved:
-   ```bash
-   rad issue state <issue-id> --closed
-   ```
-   - Add a completion comment:
-   ```bash
-   rad issue comment <issue-id> --message "Completed via Claude Code session. Tasks completed: [list task subjects]"
-   ```
+### 3. For each issue, calculate completion status
 
-6. **For partially completed issues**:
-   - Report progress but do not close the issue
-   - Show which tasks remain
+- Count total tasks linked to this issue
+- Count completed tasks (status: "completed")
+- Determine if ALL tasks are complete
 
-7. **Announce changes to the network**:
-   ```bash
-   rad sync --announce
-   ```
+### 4. Sync Plan COBs (if applicable)
 
-8. **Offer context creation** for fully closed issues:
+When tasks have `radicle_plan_id` and `radicle_plan_task_id` metadata, sync to Plan COBs:
 
-   If any issues were closed in step 5 and `rad-context` is installed:
+**Group tasks by Plan** using `radicle_plan_id` metadata.
 
-   ```bash
-   command -v rad-context >/dev/null 2>&1
-   ```
+**Link commits to Plan COB tasks** — for completed Claude Code tasks, link the implementing commit (marks it done):
 
-   Use `AskUserQuestion` to offer creating a Context COB:
+```bash
+rad-plan task link-commit <plan-id> <plan-task-id> --commit <commit-oid>
+```
 
-   ```
-   Issue <id> has been closed. Would you like to create a Context COB
-   to preserve session observations (approach, constraints, learnings, friction)?
-   ```
+The commit OID should come from the task metadata or `git log`.
 
-   Options:
-   - "Create context" — Run `/rad-context create` (which gathers data and asks Claude to reflect)
-   - "Skip" — Continue without creating context
+**Update Plan status** when all tasks complete:
 
-   This is a natural workflow boundary — the issue is done, making it an ideal moment to capture observations. Advisory only; context creation requires user opt-in.
+```bash
+rad-plan status <plan-id> completed
+```
 
-9. **Report sync summary**:
-   - Issues fully synced (marked solved)
-   - Issues with partial progress
-   - Any errors encountered
+### 5. Handle dry-run mode
+
+If `--dry-run` is in the arguments, show what would be synced without making changes. Include both issue and Plan COB sync status.
+
+### 6. Sync fully completed issues
+
+For issues where all tasks are done:
+
+Mark the Radicle issue as solved:
+```bash
+rad issue state <issue-id> --closed
+```
+
+Add a completion comment:
+```bash
+rad issue comment <issue-id> --message "Completed via Claude Code session. Tasks completed: [list task subjects]"
+```
+
+### 7. Report partially completed issues
+
+Report progress but do not close the issue. Show which tasks remain.
+
+### 8. Announce changes to the network
+
+```bash
+rad sync --announce
+```
+
+### 9. Offer context creation
+
+If any issues were closed and `rad-context` is installed:
+
+```bash
+command -v rad-context >/dev/null 2>&1
+```
+
+Use `AskUserQuestion` to offer creating a Context COB:
+
+```
+Issue <id> has been closed. Would you like to create a Context COB
+to preserve session observations (approach, constraints, learnings, friction)?
+```
+
+Options:
+- "Create context" — Run `/rad-context create`
+- "Skip" — Continue without creating context
+
+This is a natural workflow boundary — the issue is done, making it an ideal moment to capture observations.
+
+### 10. Report sync summary
+
+- Issues fully synced (marked solved)
+- Plans synced with task completion
+- Issues with partial progress
+- Any errors encountered
 
 ## Example Output
 
 ### Dry Run
 ```
-$ /rad-sync --dry-run
-
 Radicle Sync Preview (dry run)
 ==============================
 
-Issue abc123: "Implement authentication"
-  Status: READY TO CLOSE (4/4 tasks complete)
-  Tasks:
+Issues:
+  abc123: "Implement authentication"
+    Status: READY TO CLOSE (4/4 tasks complete)
     [x] Create auth middleware
     [x] Add login endpoint
     [x] Write auth tests
     [x] Update documentation
 
-Issue def456: "Add user profiles"
-  Status: IN PROGRESS (2/5 tasks complete)
-  Tasks:
+  def456: "Add user profiles"
+    Status: IN PROGRESS (2/5 tasks complete)
     [x] Create profile model
     [x] Add GET /profile endpoint
     [ ] Add profile update endpoint
     [ ] Write profile tests
     [ ] Add profile to nav
 
-Summary: 1 issue ready to close, 1 issue in progress
+Plans:
+  Plan ghi789: 4/4 tasks ready to link (abc123)
+  Plan jkl012: 2/5 tasks ready to link (def456)
+
+Summary: 1 issue ready to close, 1 plan ready to complete
 Run without --dry-run to apply changes.
 ```
 
 ### Actual Sync
 ```
-$ /rad-sync
-
 Radicle Sync
 ============
 
+Plan ghi789: Linked 4 commits to plan tasks (marked completed)
 Closing issue abc123: "Implement authentication"
   - Added completion comment
   - Marked as solved
 
+Plan jkl012: Linked 2 commits to plan tasks (in progress)
 Skipping issue def456: "Add user profiles" (2/5 tasks complete)
 
 Announcing to network... done
 
 Summary:
-  - 1 issue closed
+  - 1 issue closed, 1 plan completed
   - 1 issue in progress (not synced)
 ```
 
@@ -131,41 +163,6 @@ The key principle is **conservative completion**:
 - Issue is marked "solved" ONLY when ALL linked tasks are "completed"
 - Partial completion is tracked but not synced to Radicle
 - This prevents premature closure of issues with ongoing work
-
-```
-Tasks for issue abc123:
-  Task 1: completed  ✓
-  Task 2: completed  ✓
-  Task 3: in_progress  ←  Issue stays OPEN
-  Task 4: pending
-
-Result: Issue NOT closed (2/4 complete)
-```
-
-## Plan COB Synchronization
-
-When tasks have `radicle_plan_id` and `radicle_plan_task_id` metadata, also sync to Plan COBs:
-
-1. **Group tasks by Plan** using `radicle_plan_id` metadata
-
-2. **Link commits to Plan COB tasks**:
-   - For completed Claude Code tasks, link the implementing commit to the plan task (marks it done):
-   ```bash
-   rad-plan task link-commit <plan-id> <plan-task-id> --commit <commit-oid>
-   ```
-   - The commit OID should come from the task metadata or git log
-
-3. **Update Plan status** when all tasks complete:
-   ```bash
-   rad-plan status <plan-id> completed
-   ```
-
-4. **Report Plan sync status** in the summary:
-   ```
-   Plan Sync Summary:
-     Plan abc123: 4/4 tasks synced (marked completed)
-     Plan def456: 2/5 tasks synced (in progress)
-   ```
 
 ## Notes
 

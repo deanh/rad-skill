@@ -5,15 +5,6 @@ arguments:
   - name: issue-id
     description: The Radicle issue ID to import (short form like 'abc123' or full ID)
     required: true
-  - name: --no-plan
-    description: Skip entering plan mode and just create tasks without designing an implementation approach
-    required: false
-  - name: --save-plan
-    description: Save the implementation plan as a Plan COB (me.hdh.plan) for sharing and tracking
-    required: false
-  - name: --dispatch
-    description: After creating the plan, immediately show dispatch instructions for parallel worker execution
-    required: false
 user_invocable: true
 ---
 
@@ -23,57 +14,80 @@ Import a Radicle issue and break it down into actionable Claude Code tasks for y
 
 ## Instructions
 
-1. **Ask about plan mode** (unless `--no-plan` flag was passed):
-   - Use `AskUserQuestion` immediately with these options:
-     - "Enter plan mode (Recommended)" - Will explore codebase and design implementation approach before creating tasks
-     - "Skip planning" - Create tasks directly without planning phase
-   - If user selects plan mode, use `EnterPlanMode` tool and wait for approval
-   - If user selects skip, proceed directly to fetching the issue
+### 1. Ask about plan mode
 
-2. **Fetch the issue details** using the Radicle CLI:
+Use `AskUserQuestion` immediately with these options:
+- "Enter plan mode (Recommended)" — Will explore codebase and design implementation approach before creating tasks
+- "Skip planning" — Create tasks directly without planning phase
+
+If user selects plan mode, use `EnterPlanMode` tool and wait for approval.
+If user selects skip, proceed directly to fetching the issue.
+
+### 2. Fetch the issue details
 
 ```bash
 rad issue show <issue-id>
 ```
 
-3. **Load related contexts** (if `rad-context` is installed):
+### 3. Load related contexts
 
-   Query for Context COBs linked to this issue to surface prior session knowledge:
+Query for Context COBs linked to this issue to surface prior session knowledge.
 
-   ```bash
-   # Check if rad-context is available
-   command -v rad-context >/dev/null 2>&1
-   ```
+```bash
+# Check if rad-context is available
+command -v rad-context >/dev/null 2>&1
+```
 
-   If available, list contexts and check each for links to this issue:
+If available:
 
-   ```bash
-   rad-context list
-   rad-context show <context-id> --json
-   ```
+**Query by link (primary)** — Find contexts linked to this issue:
 
-   For each context whose `related_issues` includes this issue ID, extract and present:
-   - **Constraints** — Guard rails to follow (highest priority)
-   - **Friction** — Past problems to avoid
-   - **Learnings** — Codebase discoveries that accelerate understanding
-   - **Open items** — Unfinished work from prior sessions
+```bash
+rad-context list
+rad-context show <context-id> --json
+```
 
-   Include these in the planning phase so prior session knowledge informs task design.
+Parse JSON output. Check `related_issues` for this issue ID.
 
-4. **Analyze the issue** to understand:
-   - The overall goal/feature being requested
-   - Any acceptance criteria mentioned
-   - Technical requirements or constraints
-   - Related code files or components mentioned
+**Query by files (secondary)** — If the issue mentions specific files, find contexts whose `filesTouched` overlap:
 
-5. **Break down into discrete tasks** targeting 1-4 hour chunks of work:
-   - Identify logical work units (e.g., "Create middleware", "Write tests", "Update docs")
-   - Consider dependencies between tasks
-   - Each task should be independently completable
+```bash
+rad-context show <context-id> --json
+```
 
-6. **Create Claude Code tasks** using the TaskCreate tool for each work item:
+Compare `filesTouched` against files referenced in the issue.
 
-For each task, include this metadata to link it to the parent issue:
+**Surface in priority order:**
+1. **Constraints** — Guard rails that affect correctness
+2. **Friction** — Avoid repeating past mistakes
+3. **Learnings** — Accelerate codebase understanding
+4. **Approach** — Understand reasoning and rejected alternatives
+5. **Open items** — Know what's incomplete
+6. **Verification** — What checks passed/failed
+
+**Multiple contexts**: Present chronologically (oldest first). Flag conflicting constraints across contexts.
+
+Include these in the planning phase so prior session knowledge informs task design.
+
+### 4. Analyze the issue
+
+Understand:
+- The overall goal/feature being requested
+- Any acceptance criteria mentioned
+- Technical requirements or constraints
+- Related code files or components mentioned
+
+### 5. Break down into discrete tasks
+
+Target 1–4 hour chunks of work:
+- Identify logical work units (e.g., "Create middleware", "Write tests", "Update docs")
+- Consider dependencies between tasks
+- Each task should be independently completable
+
+### 6. Create Claude Code tasks
+
+Use the `TaskCreate` tool for each work item. Include this metadata to link to the parent issue:
+
 ```json
 {
   "radicle_issue_id": "<the-issue-id>",
@@ -83,21 +97,70 @@ For each task, include this metadata to link it to the parent issue:
 }
 ```
 
-7. **Set up task dependencies** using TaskUpdate if tasks must be completed in order:
-   - Use `addBlockedBy` to indicate prerequisites
-   - Use `addBlocks` to indicate what a task enables
+### 7. Set up task dependencies
 
-8. **Report the import summary**:
-   - Number of tasks created
-   - Brief description of each task
-   - Any suggested implementation order
-   - Note any ambiguities that might need clarification
+Use `TaskUpdate` if tasks must be completed in order:
+- Use `addBlockedBy` to indicate prerequisites
+- Use `addBlocks` to indicate what a task enables
 
-9. **Design implementation approach** (if in plan mode):
-   - Explore the codebase to understand existing patterns and architecture
-   - Identify key files that will need modification
-   - Draft an implementation plan for the first unblocked task
-   - Use `ExitPlanMode` when the plan is ready for user approval
+### 8. Report the import summary
+
+- Number of tasks created
+- Brief description of each task
+- Any suggested implementation order
+- Note any ambiguities that might need clarification
+
+### 9. Offer to save as Plan COB
+
+After tasks are created, if `rad-plan` is installed:
+
+```bash
+command -v rad-plan >/dev/null 2>&1
+```
+
+Use `AskUserQuestion` to offer:
+- "Save as Plan COB" — Persist the plan for sharing and tracking
+- "Skip" — Continue with session tasks only
+
+If user chooses to save:
+
+1. Create the Plan COB:
+```bash
+rad-plan open "<issue-title>" --description "<plan-description>"
+```
+
+2. Add tasks to the Plan COB:
+```bash
+rad-plan task add <plan-id> "<task-subject>" --description "<task-description>" --estimate "<estimate>"
+```
+
+3. Link the Plan to the Issue:
+```bash
+rad-plan link <plan-id> --issue <issue-id>
+```
+
+4. Store Plan metadata in each Claude Code task:
+```json
+{
+  "radicle_issue_id": "<the-issue-id>",
+  "radicle_plan_id": "<the-plan-id>",
+  "radicle_plan_task_id": "<the-plan-task-id>",
+  "radicle_repo": "<output-of-rad-.>",
+  "source": "radicle"
+}
+```
+
+5. Announce to network:
+```bash
+rad sync --announce
+```
+
+### 10. Design implementation approach (if in plan mode)
+
+- Explore the codebase to understand existing patterns and architecture
+- Identify key files that will need modification
+- Draft an implementation plan for the first unblocked task
+- Use `ExitPlanMode` when the plan is ready for user approval
 
 ## Example Output
 
@@ -126,66 +189,9 @@ Created 4 tasks:
 Run `/rad-status` to see progress, or start working on Task #1.
 ```
 
-## Saving as Plan COB (--save-plan)
-
-When `--save-plan` is passed, create a Plan COB to persist the implementation plan:
-
-1. **Create the Plan COB** using the rad-plan CLI:
-```bash
-rad-plan open "<issue-title>" --description "<plan-description>"
-```
-
-2. **Add tasks to the Plan COB**:
-```bash
-rad-plan task add <plan-id> "<task-subject>" --description "<task-description>" --estimate "<estimate>"
-```
-
-3. **Link the Plan to the Issue**:
-```bash
-rad-plan link <plan-id> --issue <issue-id>
-```
-
-4. **Store Plan metadata** in each Claude Code task:
-```json
-{
-  "radicle_issue_id": "<the-issue-id>",
-  "radicle_plan_id": "<the-plan-id>",
-  "radicle_plan_task_id": "<the-plan-task-id>",
-  "radicle_repo": "<output-of-rad-.>",
-  "source": "radicle"
-}
-```
-
-5. **Announce to network**:
-```bash
-rad sync --announce
-```
-
-This enables bidirectional sync between Claude Code tasks and the Plan COB tasks.
-
-## Dispatch Mode (--dispatch)
-
-When `--dispatch` is passed (implies `--save-plan`), after creating the Plan COB, immediately show dispatch instructions:
-
-1. **Create the Plan COB** as in the `--save-plan` flow above
-2. **Set plan status to approved**:
-```bash
-rad-plan status <plan-id> approved
-```
-3. **Run dispatch analysis** — categorize tasks as Ready, Blocked (dependency), or Blocked (file conflict) using the same logic as `/rad-orchestrate`:
-   - Ready: pending, all dependencies met, no file overlap with in-progress tasks
-   - Blocked: pending, has unmet dependencies or file conflicts
-4. **Present dispatch instructions** for each ready task, including:
-   - Task ID, subject, affected files
-   - Suggested worktree name
-   - Worker launch guidance
-5. **Inform the user** they can run `/rad-orchestrate <plan-id>` to automate worker dispatch across worktrees
-
 ## Notes
 
 - If the issue is too vague to break down, create a single task and note that clarification may be needed
-- Multiple tasks can share the same `radicle_issue_id` - this enables rollup sync
+- Multiple tasks can share the same `radicle_issue_id` — this enables rollup sync
 - Use `/rad-status` to view progress across all imported issues
 - Use `/rad-sync` when tasks are complete to update the Radicle issue
-- Use `/rad-plan sync` to sync task completion to Plan COBs
-- Use `/rad-orchestrate` to automate worker dispatch across worktrees

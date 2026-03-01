@@ -182,16 +182,71 @@ rad-plan export <plan-id> --format md
 rad-plan export <plan-id> --format json
 ```
 
+## Interactive Plan Management
+
+These patterns let Claude handle ad-hoc plan operations via the `rad-plan` CLI. All commands accept **short-form IDs** (minimum 7 hex characters).
+
+### Creating a Plan Interactively
+
+1. Gather details via `AskUserQuestion`: title, description, labels (optional), initial tasks (optional), linked issue (optional)
+2. Create the Plan COB:
+```bash
+rad-plan open "<title>" --description "<description>" --labels "<labels>"
+```
+3. Add tasks if provided:
+```bash
+rad-plan task add <plan-id> "<task-subject>" \
+  --description "<description>" \
+  --estimate "<time-estimate>" \
+  --files "<file1>,<file2>"
+```
+4. Link to issue if specified:
+```bash
+rad-plan link <plan-id> --issue <issue-id>
+```
+5. Announce to network:
+```bash
+rad sync --announce
+```
+
+### Editing a Plan
+
+```bash
+rad-plan edit <plan-id> --title "New title"
+rad-plan edit <plan-id> --description "Updated description"
+rad-plan edit <plan-id> --title "New title" --description "Updated description"
+```
+
+### Exporting a Plan
+
+```bash
+rad-plan export abc1234 --format md
+rad-plan export abc1234 --format json
+rad-plan export abc1234 --format md --output plan.md
+```
+
+### Changing Plan Status
+
+```bash
+rad-plan status <plan-id> draft
+rad-plan status <plan-id> approved
+rad-plan status <plan-id> in-progress
+rad-plan status <plan-id> completed
+rad-plan status <plan-id> archived
+```
+
+### Plan Comments
+
+```bash
+rad-plan comment <plan-id> "Implementation note"
+rad-plan comment <plan-id> "Reply to comment" --reply-to <comment-id>
+```
+
 ## Claude Code Integration
 
 ### Creating Plans from Plan Mode
 
-After completing plan mode exploration, save as a Plan COB:
-
-1. Use `/rad-plan create` command
-2. Or use `--save-plan` flag with `/rad-import`
-
-The plan-manager agent handles the creation process.
+After completing plan mode exploration, save as a Plan COB. The `/rad-import` command offers this interactively after task creation. The plan-manager agent handles the creation process.
 
 ### Task Metadata
 
@@ -218,15 +273,14 @@ Use `/rad-sync` to synchronize:
 ### 1. Import Issue with Plan
 
 ```
-/rad-import abc123 --save-plan
+/rad-import abc123
 ```
 
-This:
+After task creation, `/rad-import` offers to save as a Plan COB. This:
 - Fetches issue details
 - Enters plan mode to design implementation
-- Creates Plan COB with tasks
-- Links plan to issue
-- Creates Claude Code tasks with metadata
+- Creates Claude Code tasks
+- Optionally creates Plan COB with tasks and links to issue
 
 ### 2. Work on Tasks
 
@@ -277,10 +331,9 @@ See `agents-cobs-worktrees.md` for the full design and `.pi/extensions/rad-orche
 
 ## Related Commands
 
-- `/rad-import` - Import issues, optionally create plans
-- `/rad-sync` - Sync task completion to issues and plans
-- `/rad-status` - View task status including plan links
-- `/rad-plan` - Manage plans directly
+- `/rad-import` — Import issues, optionally create plans (interactive plan-save prompt)
+- `/rad-sync` — Sync task completion to issues and plans
+- `/rad-status` — View repo state including plan progress
 
 ## Installation
 
@@ -302,4 +355,4 @@ rad-plan --version
 
 ### Detection
 
-The session-start hook automatically detects whether `rad-plan` is installed. If it is not found, the hook will display install instructions. All Plan COB features (`--save-plan`, `/rad-plan`, plan sync) gracefully degrade when `rad-plan` is not available.
+The session-start hook automatically detects whether `rad-plan` is installed. If it is not found, the hook will display install instructions. All Plan COB features (plan save, plan sync) gracefully degrade when `rad-plan` is not available.

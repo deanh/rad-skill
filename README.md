@@ -10,22 +10,20 @@ A skill package for working with [Radicle](https://radicle.xyz) — a peer-to-pe
 - **Context COBs**: Capture session observations as durable records (`me.hdh.context`) for future sessions and collaborators
 - **Multi-Agent Orchestration**: Coordinate parallel task execution across git worktrees using COBs as shared state, with automated orchestration on pi
 - **Bidirectional Sync**: Import issues as tasks with automatic rollup on sync (Claude Code)
-- **Context Loading**: Load full issue/patch context including discussion history and prior session observations
 - **Session Awareness**: Detect Radicle repos and surface relevant information at session start
 
 ## Platform Support
 
 | Feature | Claude Code | pi |
 |---------|------------|-----|
-| Skills (radicle, rad-tasks, rad-plans, rad-contexts) | ✓ | ✓ |
+| Skills (radicle, rad-plans, rad-contexts) | ✓ | ✓ |
 | `/rad-context` command | ✓ (markdown) | ✓ (extension) |
 | `/rad-import`, `/rad-sync`, `/rad-status` commands | ✓ | — |
-| `/rad-plan`, `/rad-issue` commands | ✓ | — |
+| `/rad-issue` command | ✓ | — |
 | `/rad-orchestrate` (multi-agent worktree orchestration) | — | ✓ (extension) |
 | Session start detection | ✓ (hook) | ✓ (extension) |
 | Compaction-triggered context creation | — | ✓ (extension) |
 | Shutdown reminder | ✓ (hook) | ✓ (extension) |
-| Context loader agent | ✓ | — |
 | Plan manager agent (with dispatch) | ✓ | — |
 | Worker agent (worktree execution) | ✓ | ✓ (agent) |
 
@@ -90,43 +88,35 @@ pi -e /path/to/rad-skill/.pi/extensions/rad-context.ts \
 
 ## Skills
 
-Four knowledge skills, all following the Agent Skills standard:
+Three knowledge skills, all following the Agent Skills standard:
 
 | Skill | Description |
 |-------|-------------|
 | **radicle** | Core `rad` CLI operations — init, clone, patch, issue, sync, node management |
-| **rad-tasks** | Task-issue integration workflow and `/rad-*` commands |
-| **rad-plans** | Plan COBs (`me.hdh.plan`) and `rad-plan` CLI |
+| **rad-plans** | Plan COBs (`me.hdh.plan`), `rad-plan` CLI, and interactive plan management |
 | **rad-contexts** | Context COBs (`me.hdh.context`) and `rad-context` CLI |
 
-## Tasks (Claude Code)
+## Commands (Claude Code)
 
-### `/rad-import <issue-id> [--no-plan] [--save-plan] [--dispatch]`
+### `/rad-import <issue-id>`
 
-Import a Radicle issue and break it down into tasks. Enters plan mode by default to explore the codebase before creating tasks.
+Import a Radicle issue and break it down into tasks. Enters plan mode by default to explore the codebase before creating tasks. After task creation, interactively offers to save as a Plan COB.
 
 ```
-/rad-import abc123              # Enter plan mode first (default)
-/rad-import abc123 --no-plan    # Skip planning, create tasks directly
-/rad-import abc123 --save-plan  # Also save plan as a Plan COB
-/rad-import abc123 --dispatch   # Save plan and show dispatch instructions
+/rad-import abc123
 ```
 
 ### `/rad-sync [--dry-run]`
 
-Sync completed tasks back to Radicle issues. Uses rollup logic — an issue is marked "solved" only when ALL linked tasks are completed. Offers context creation when closing issues.
+Sync completed tasks back to Radicle issues and Plan COBs. Uses rollup logic — an issue is marked "solved" only when ALL linked tasks are completed. Offers context creation when closing issues.
 
 ### `/rad-status [issue-id]`
 
-View progress dashboard for imported issues.
+Query the repository's actual state and display a unified overview of open issues, active plans, and session tasks with actionable suggestions.
 
 ### `/rad-issue <description> [flags]`
 
 Create Radicle issues from descriptions, tasks, or plan files. Dispatches specialist research roles for non-trivial issues.
-
-### `/rad-plan <action> [id]`
-
-Manage Plan COBs: list, show, create, sync, export.
 
 ### `/rad-context <action> [id]`
 
@@ -157,11 +147,11 @@ The orchestrator retries failed workers, logs failures to `/tmp/`, and tracks co
 
 On Claude Code, the plan-manager agent handles dispatch interactively:
 
-1. **Import and plan**: `/rad-import <issue-id> --dispatch` creates a Plan COB with tasks
+1. **Import and plan**: `/rad-import <issue-id>` creates tasks, optionally saves as a Plan COB
 2. **Dispatch**: Plan-manager identifies ready tasks and provides worker launch instructions
 3. **Workers**: Launch `claude --worktree` sessions per task — each worker claims a task, implements, produces a commit + Context COB
 4. **Iterate**: Re-run dispatch to see context feedback and the next batch of ready tasks
-5. **Complete**: When all tasks pass, close the plan and issue
+5. **Complete**: When all tasks pass, `/rad-sync` closes the plan and issue
 
 ### Agents
 
@@ -170,7 +160,6 @@ On Claude Code, the plan-manager agent handles dispatch interactively:
 | **plan-manager** | Creates plans, dispatches tasks, evaluates context feedback | Claude Code | Main worktree |
 | **rad-worker** | Executes one task: code, commit, Context COB, DONE signal | pi | Isolated worktree |
 | **worker** | Executes one task: code, commit, Context COB | Claude Code | Isolated worktree |
-| **context-loader** | Loads issue/patch/context details for other agents | Claude Code | Any worktree |
 
 ## Task-Issue Mapping (Claude Code)
 

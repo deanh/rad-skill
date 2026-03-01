@@ -48,13 +48,14 @@ fi
 
 echo ""
 
+echo "Use /rad-status for a full overview."
+
 if [ "$OPEN_ISSUES" -gt 0 ]; then
     echo "Use /rad-import <issue-id> to import an issue as tasks."
-    echo "Use 'rad issue list' to see all open issues."
 fi
 
 if [ "$RAD_PLAN_INSTALLED" = true ] && [ "$ACTIVE_PLANS" -gt 0 ]; then
-    echo "Use /rad-plan list to see active plans."
+    echo "Use 'rad-plan list' to see active plans."
 fi
 
 if [ "$RAD_CONTEXT_INSTALLED" = true ] && [ "$CONTEXT_COUNT" -gt 0 ]; then

@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-03-01
+
+### Added
+
+- `/rad-status` now queries actual repository state (`rad issue list`, `rad-plan list`) and cross-references with session tasks — shows open issues, active plans, and session progress in a unified dashboard with actionable suggestions
+- `/rad-import` offers interactive "Save as Plan COB?" prompt after task creation, replacing the old `--save-plan` flag
+- `/rad-import` context-loading step enhanced with full priority-ordered pattern (constraints → friction → learnings → approach → open items → verification), multi-context chronological display, and file-based secondary queries
+- `rad-plans` skill now includes interactive plan management patterns (create, edit, export, status, comments) absorbed from the deleted `/rad-plan` command
+- `/rad-sync` now shows Plan COB sync status prominently alongside issue sync in both dry-run and actual output
+- Session-start hook suggests `/rad-status` as the first action
+
+### Changed
+
+- Plugin version bumped to 0.8.0
+- `/rad-import` no longer accepts `--no-plan`, `--save-plan`, or `--dispatch` flags — plan mode prompt and plan-save prompt are now interactive
+- `/rad-sync` description updated to reflect dual sync scope (issues and Plan COBs)
+- `plan-manager` agent scoped to orchestration pipeline only — removed "Sync Task Completion" and "Convert Tasks to Issues" workflows (handled by `/rad-sync` and `/rad-issue --from-task`)
+- Session-start hook uses `rad-plan list` (CLI) instead of `/rad-plan list` (deleted command)
+- README updated: platform support table, skills table (3 not 4), commands section (no flags on `/rad-import`, no `/rad-plan`), agents table (no `context-loader`), manual dispatch section
+
+### Removed
+
+- `rad-tasks` skill (`skills/rad-tasks/SKILL.md`) — duplicated `/rad-import`, `/rad-sync`, and `/rad-status` command documentation
+- `/rad-plan` command (`.claude-plugin/commands/rad-plan.md`) — CRUD patterns merged into `rad-plans` skill; users interact via `rad-plan` CLI directly
+- `context-loader` agent (`.claude-plugin/agents/context-loader.md`) — context-loading logic already inlined in `/rad-import` (step 3) and `worker` agent; ad-hoc queries handled by `rad-contexts` skill
+
 ## [0.7.1] - 2026-02-27
 
 ### Changed
@@ -152,7 +178,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - README with installation instructions (global and project-local)
 
 [Unreleased]: https://app.radicle.xyz/nodes/seed.radicle.xyz/rad:zvBj4kByGeQSrSy2c4H7fyK42cS8/commits/main
-[0.7.1]: https://app.radicle.xyz/nodes/seed.radicle.xyz/rad:zvBj4kByGeQSrSy2c4H7fyK42cS8/commits/main
+[0.8.0]: https://app.radicle.xyz/nodes/seed.radicle.xyz/rad:zvBj4kByGeQSrSy2c4H7fyK42cS8/commits/main
+[0.7.1]: https://app.radicle.xyz/nodes/seed.radicle.xyz/rad:zvBj4kByGeQSrSy2c4H7fyK42cS8/commits/607801a
 [0.7.0]: https://app.radicle.xyz/nodes/seed.radicle.xyz/rad:zvBj4kByGeQSrSy2c4H7fyK42cS8/commits/d2a2b3c
 [0.6.0]: https://app.radicle.xyz/nodes/seed.radicle.xyz/rad:zvBj4kByGeQSrSy2c4H7fyK42cS8/commits/3f68c8c
 [0.5.0]: https://app.radicle.xyz/nodes/seed.radicle.xyz/rad:zvBj4kByGeQSrSy2c4H7fyK42cS8/commits/c982900

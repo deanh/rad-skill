@@ -235,7 +235,6 @@ See `.pi/agents/rad-worker.md` for the full worker protocol and `.pi/extensions/
 - `/rad-context list` — View existing contexts
 - `/rad-context show <id>` — View context details
 - `/rad-context link <id>` — Add links to issues/patches/plans/commits
-- context-loader agent queries contexts when loading background for issues/patches
 - `/rad-import` surfaces linked contexts during planning
 - `/rad-sync` offers context creation when closing issues
 

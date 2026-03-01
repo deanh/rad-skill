@@ -1,6 +1,6 @@
 ---
 name: rad-status
-description: Display progress dashboard for Radicle issues and their linked tasks
+description: Display a unified overview of Radicle repo state — open issues, active plans, and session tasks
 arguments:
   - name: issue-id
     description: Optional issue ID to show details for a specific issue
@@ -10,108 +10,110 @@ user_invocable: true
 
 # Radicle Status Dashboard
 
-Display progress for Radicle issues with task breakdown, showing completion status across your coding session.
+Query the repository's actual state and display a unified overview of open issues, active plans, and session tasks.
 
 ## Instructions
 
-1. **Get all tasks** using the TaskList tool
+### 1. Query repository state
 
-2. **Filter and group Radicle-linked tasks**:
-   - Find tasks with `radicle_issue_id` in metadata
-   - Group by issue ID
-   - Include `radicle_issue_title` from metadata for display
+Run these commands to gather the full picture:
 
-3. **If a specific issue ID is provided** in arguments:
-   - Show detailed view for just that issue
-   - Include full task descriptions
-
-4. **Calculate progress for each issue**:
-   - Total tasks count
-   - Completed tasks count
-   - In-progress tasks count
-   - Pending tasks count
-   - Percentage complete
-
-5. **Display progress dashboard** with visual indicators:
-
-```
-Radicle Issue Progress
-======================
-
-Issue abc123: "Implement authentication"
-  [####################] 4/4 tasks (100%) - READY TO SYNC
-  [x] Create auth middleware (completed)
-  [x] Add login endpoint (completed)
-  [x] Write auth tests (completed)
-  [x] Update documentation (completed)
-
-Issue def456: "Add user profiles"
-  [########------------] 2/5 tasks (40%)
-  [x] Create profile model (completed)
-  [x] Add GET /profile endpoint (completed)
-  [>] Add profile update endpoint (in_progress)
-  [ ] Write profile tests (pending)
-  [ ] Add profile to nav (pending)
-
-Issue ghi789: "Fix search bug"
-  [--------------------] 0/2 tasks (0%)
-  [ ] Investigate search query (pending)
-  [ ] Fix and add regression test (pending)
-
-Summary: 3 issues tracked, 1 ready to sync
+```bash
+# Open issues
+rad issue list --state open
 ```
 
-6. **Use status indicators**:
-   - `[x]` = completed
-   - `[>]` = in_progress
-   - `[ ]` = pending
-   - `[!]` = blocked (if task has unresolved blockedBy)
+```bash
+# Active plans (if rad-plan is installed)
+command -v rad-plan >/dev/null 2>&1 && rad-plan list
+```
 
-7. **Show progress bar** using characters:
-   - `#` for completed portion
-   - `-` for remaining portion
-   - 20 characters total width
+### 2. Query session tasks
 
-8. **Highlight actionable items**:
-   - Issues at 100% are "READY TO SYNC"
-   - Show blocked tasks if dependencies exist
-   - Suggest next actions
+Use the `TaskList` tool to get any Claude Code tasks in the current session. Filter for tasks with `radicle_issue_id` metadata.
 
-## Example: Detailed Single Issue View
+### 3. Cross-reference and display
 
-When called with an issue ID:
+Build a unified dashboard that connects issues, plans, and session tasks:
 
 ```
-$ /rad-status abc123
-
-Issue abc123: "Implement authentication"
-==========================================
+Radicle Status
+==============
 Repository: rad:z3GhWjk...
-Status: READY TO SYNC (4/4 complete)
 
-Tasks:
-------
-1. Create auth middleware [completed]
-   - Set up JWT validation middleware for protected routes
+Open Issues (3)
+───────────────
+  abc1234  P0: Implement authentication
+           Plan: def5678 [in-progress] 2/4 tasks done
+           Session: 3 tasks (1 completed, 1 in-progress, 1 pending)
 
-2. Add login endpoint [completed]
-   - Implement POST /api/login with credential validation
-   - Blocked by: Task 1
+  ghi7890  P1: Fix search performance
+           Plan: none
+           Session: not imported
 
-3. Write auth tests [completed]
-   - Unit tests for middleware, integration tests for login
-   - Blocked by: Task 2
+  jkl3456  P2: Update API documentation
+           Plan: none
+           Session: not imported
 
-4. Update documentation [completed]
-   - Document new auth endpoints and requirements
-   - Blocked by: Task 2
+Active Plans (1)
+────────────────
+  def5678  Implement authentication [in-progress]
+           Tasks: 2/4 complete | Linked to issue abc1234
 
-Next: Run `/rad-sync` to mark this issue as solved in Radicle.
+Session Tasks (3)
+─────────────────
+  Issue abc1234: "Implement authentication"
+    [##########----------] 1/3 tasks (33%)
+    [x] Create auth middleware (completed)
+    [>] Add login endpoint (in_progress)
+    [ ] Write auth tests (pending)
+
+Suggestions
+───────────
+  • Issue abc1234 has session tasks in progress — keep working or /rad-sync when done
+  • Issues ghi7890, jkl3456 are not imported — use /rad-import <id> to start
 ```
 
-## Notes
+### 4. Single issue detail view
 
-- If no Radicle-linked tasks exist, display "No Radicle issues imported. Use /rad-import to get started."
-- Progress bars are purely visual - actual completion is binary per task
-- Use `/rad-sync --dry-run` to preview what would be synced
-- Blocked tasks are shown but cannot be worked on until dependencies resolve
+If a specific issue ID is provided in arguments, show a detailed view for just that issue:
+
+```bash
+rad issue show <issue-id>
+```
+
+Include:
+- Full issue description
+- Discussion summary
+- Linked plan details (if any)
+- Session task status with descriptions
+- Suggested next action
+
+### 5. Handle edge cases
+
+- **No open issues**: "No open issues. Use `rad issue open` or `/rad-issue` to create one."
+- **No session tasks but open issues exist**: Show the issues and suggest `/rad-import`
+- **No rad-plan installed**: Skip plan section silently
+- **Session tasks but no open issues**: Show session tasks with a note that the issues may have been closed
+
+### 6. Status indicators for session tasks
+
+- `[x]` = completed
+- `[>]` = in_progress
+- `[ ]` = pending
+- `[!]` = blocked (if task has unresolved blockedBy)
+
+### 7. Progress bar
+
+Use characters for visual progress:
+- `#` for completed portion
+- `-` for remaining portion
+- 20 characters total width
+
+### 8. Actionable suggestions
+
+Always end with context-aware suggestions:
+- Issues at 100% session tasks → "Ready to sync — run `/rad-sync`"
+- Issues with in-progress tasks → "Keep working or `/rad-sync --dry-run` to check progress"
+- Unimported issues → "Use `/rad-import <id>` to start working"
+- Issues with plans → "Run `rad-plan show <id>` for plan details"
