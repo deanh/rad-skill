@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { convertToLlm, serializeConversation } from "@mariozechner/pi-coding-agent";
+import { buildSessionContext, convertToLlm, serializeConversation } from "@mariozechner/pi-coding-agent";
 import { complete } from "@mariozechner/pi-ai";
 
 interface RadContextState {
@@ -58,75 +58,28 @@ export default function (pi: ExtensionAPI) {
     return state.isRadicleRepo && state.radContextInstalled;
   }
 
-  // Task 1: Detect Radicle repo and rad-context CLI
-  pi.on("session_start", async (_event, ctx) => {
-    state.sessionStartTime = Date.now();
-
-    const radResult = await pi.exec("rad", ["."], { timeout: 5000 });
-    if (radResult.code !== 0) return;
-
-    state.isRadicleRepo = true;
-    state.repoId = radResult.stdout.trim();
-
-    const whichResult = await pi.exec("which", ["rad-context"], { timeout: 3000 });
-    if (whichResult.code !== 0) return;
-
-    state.radContextInstalled = true;
-
-    const listResult = await pi.exec("rad-context", ["list"], { timeout: 5000 });
-    const contextCount = listResult.code === 0
-      ? listResult.stdout.trim().split("\n").filter((l: string) => l.length > 0).length
-      : 0;
-
-    let msg = `Radicle repo: ${state.repoId}`;
-    if (contextCount > 0) {
-      msg += ` · ${contextCount} context${contextCount === 1 ? "" : "s"}`;
-    }
-    ctx.ui.notify(msg, "info");
-  });
-
-  // Task 2a: Stash conversation data before compaction proceeds
-  pi.on("session_before_compact", async (event, _ctx) => {
-    if (!isActive()) return;
-
-    const { preparation } = event;
-    const allMessages = [...preparation.messagesToSummarize, ...preparation.turnPrefixMessages];
-
-    if (allMessages.length === 0) return;
-
-    state.stashedConversation = serializeConversation(convertToLlm(allMessages));
-    state.stashedModifiedFiles = preparation.fileOps?.modifiedFiles ?? [];
-    state.stashedReadFiles = preparation.fileOps?.readFiles ?? [];
-
-    // Return nothing — let default compaction proceed
-  });
-
-  // Task 2b: After compaction, extract context and create COB
-  pi.on("session_compact", async (_event, ctx) => {
-    if (!isActive()) return;
-    if (!state.stashedConversation) return;
-
-    const conversation = state.stashedConversation;
-    const modifiedFiles = state.stashedModifiedFiles;
-
-    // Clear stash
-    state.stashedConversation = null;
-    state.stashedModifiedFiles = [];
-    state.stashedReadFiles = [];
-
-    // Find a small model for extraction
+  /**
+   * Shared extraction logic: takes a serialized conversation and file list,
+   * calls Haiku to extract structured observations, creates the Context COB,
+   * links commits, and announces.
+   */
+  async function extractAndCreateContext(
+    ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
+    conversation: string,
+    modifiedFiles: string[],
+  ): Promise<boolean> {
     const model = ctx.modelRegistry.find("anthropic", "claude-3-5-haiku-latest")
       ?? ctx.modelRegistry.find("anthropic", "claude-haiku-4-5");
 
     if (!model) {
       ctx.ui.notify("rad-context: no Haiku model found for context extraction", "warning");
-      return;
+      return false;
     }
 
     const apiKey = await ctx.modelRegistry.getApiKey(model);
     if (!apiKey) {
       ctx.ui.notify(`rad-context: no API key for ${model.provider}`, "warning");
-      return;
+      return false;
     }
 
     ctx.ui.notify("Extracting session context...", "info");
@@ -159,16 +112,15 @@ export default function (pi: ExtensionAPI) {
 
       if (!responseText) {
         ctx.ui.notify("rad-context: extraction returned empty response", "warning");
-        return;
+        return false;
       }
 
-      // Parse and validate the JSON
       let contextJson: Record<string, unknown>;
       try {
         contextJson = JSON.parse(responseText);
       } catch {
         ctx.ui.notify("rad-context: extraction returned invalid JSON", "warning");
-        return;
+        return false;
       }
 
       // Ensure filesTouched includes the mechanical file list
@@ -187,10 +139,9 @@ export default function (pi: ExtensionAPI) {
 
       if (createResult.code !== 0) {
         ctx.ui.notify(`rad-context: creation failed: ${createResult.stderr}`, "error");
-        return;
+        return false;
       }
 
-      // Extract context ID from output
       const contextId = createResult.stdout.trim().match(/([0-9a-f]{40})/)?.[1];
 
       if (contextId) {
@@ -208,7 +159,6 @@ export default function (pi: ExtensionAPI) {
           }
         }
 
-        // Announce
         await pi.exec("rad", ["sync", "--announce"], { timeout: 15000 });
 
         state.contextCreatedThisSession = true;
@@ -217,13 +167,123 @@ export default function (pi: ExtensionAPI) {
         state.contextCreatedThisSession = true;
         ctx.ui.notify("Context created", "info");
       }
+
+      return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       ctx.ui.notify(`rad-context: extraction failed: ${message}`, "error");
+      return false;
     }
+  }
+
+  /**
+   * Get files modified since session start via git.
+   */
+  async function getModifiedFilesSinceStart(): Promise<string[]> {
+    const since = new Date(state.sessionStartTime).toISOString();
+
+    // Files modified in commits since session start
+    const logResult = await pi.exec(
+      "git", ["log", "--format=", "--name-only", `--since=${since}`],
+      { timeout: 5000 },
+    );
+    const committedFiles = logResult.code === 0
+      ? logResult.stdout.trim().split("\n").filter((l: string) => l.length > 0)
+      : [];
+
+    // Uncommitted modified files (staged + unstaged)
+    const diffResult = await pi.exec("git", ["diff", "--name-only", "HEAD"], { timeout: 5000 });
+    const uncommittedFiles = diffResult.code === 0
+      ? diffResult.stdout.trim().split("\n").filter((l: string) => l.length > 0)
+      : [];
+
+    const stagedResult = await pi.exec("git", ["diff", "--name-only", "--cached"], { timeout: 5000 });
+    const stagedFiles = stagedResult.code === 0
+      ? stagedResult.stdout.trim().split("\n").filter((l: string) => l.length > 0)
+      : [];
+
+    return [...new Set([...committedFiles, ...uncommittedFiles, ...stagedFiles])];
+  }
+
+  // Detect Radicle repo and rad-context CLI
+  pi.on("session_start", async (_event, ctx) => {
+    state.sessionStartTime = Date.now();
+
+    const radResult = await pi.exec("rad", ["."], { timeout: 5000 });
+    if (radResult.code !== 0) return;
+
+    state.isRadicleRepo = true;
+    state.repoId = radResult.stdout.trim();
+
+    const whichResult = await pi.exec("which", ["rad-context"], { timeout: 3000 });
+    if (whichResult.code !== 0) return;
+
+    state.radContextInstalled = true;
+
+    const listResult = await pi.exec("rad-context", ["list"], { timeout: 5000 });
+    const contextCount = listResult.code === 0
+      ? listResult.stdout.trim().split("\n").filter((l: string) => l.length > 0).length
+      : 0;
+
+    let msg = `Radicle repo: ${state.repoId}`;
+    if (contextCount > 0) {
+      msg += ` · ${contextCount} context${contextCount === 1 ? "" : "s"}`;
+    }
+    ctx.ui.notify(msg, "info");
   });
 
-  // Task 4: Manual /rad-context command
+  // Mid-session: stash conversation data before compaction proceeds
+  pi.on("session_before_compact", async (event, _ctx) => {
+    if (!isActive()) return;
+
+    const { preparation } = event;
+    const allMessages = [...preparation.messagesToSummarize, ...preparation.turnPrefixMessages];
+
+    if (allMessages.length === 0) return;
+
+    state.stashedConversation = serializeConversation(convertToLlm(allMessages));
+    state.stashedModifiedFiles = preparation.fileOps?.modifiedFiles ?? [];
+    state.stashedReadFiles = preparation.fileOps?.readFiles ?? [];
+  });
+
+  // Mid-session: after compaction, extract context from the compacted portion
+  pi.on("session_compact", async (_event, ctx) => {
+    if (!isActive()) return;
+    if (!state.stashedConversation) return;
+
+    const conversation = state.stashedConversation;
+    const modifiedFiles = state.stashedModifiedFiles;
+
+    state.stashedConversation = null;
+    state.stashedModifiedFiles = [];
+    state.stashedReadFiles = [];
+
+    await extractAndCreateContext(ctx, conversation, modifiedFiles);
+  });
+
+  // End of session: extract context from the full conversation
+  pi.on("session_shutdown", async (_event, ctx) => {
+    if (!isActive()) return;
+    if (state.contextCreatedThisSession) return;
+
+    // Build the current conversation from session entries
+    const entries = ctx.sessionManager.getEntries();
+    if (entries.length === 0) return;
+
+    const sessionContext = buildSessionContext(entries, ctx.sessionManager.getLeafId());
+    if (sessionContext.messages.length === 0) return;
+
+    // Skip trivially short sessions (fewer than 2 assistant messages)
+    const assistantMessages = sessionContext.messages.filter(m => m.role === "assistant");
+    if (assistantMessages.length < 2) return;
+
+    const conversation = serializeConversation(convertToLlm(sessionContext.messages));
+    const modifiedFiles = await getModifiedFilesSinceStart();
+
+    await extractAndCreateContext(ctx, conversation, modifiedFiles);
+  });
+
+  // Manual /rad-context command
   pi.registerCommand("rad-context", {
     description: "Manage Context COBs (create, list, show)",
     handler: async (args, ctx) => {
@@ -258,18 +318,5 @@ export default function (pi: ExtensionAPI) {
         ctx.ui.notify("Usage: /rad-context [list | show <id> | create]", "info");
       }
     },
-  });
-
-  // Task 3: Shutdown reminder
-  pi.on("session_shutdown", async (_event, ctx) => {
-    if (!isActive()) return;
-    if (state.contextCreatedThisSession) return;
-    if (!ctx.hasUI) return;
-
-    await ctx.ui.confirm(
-      "Save session context?",
-      "No Context COB was created this session. Use /rad-context create to preserve session observations.",
-      { timeout: 5000 },
-    );
   });
 }
