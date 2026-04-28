@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-04-28
+
+### Removed
+
+- Root-level `skills/`, `hooks/`, `.claude-plugin/commands/`, `.claude-plugin/agents/`, and `.claude-plugin/plugin.json` (the monolith manifest) — all functionality now lives in `plugins/` subdirectories
+
 ## [0.10.0] - 2026-04-28
 
 ### Changed

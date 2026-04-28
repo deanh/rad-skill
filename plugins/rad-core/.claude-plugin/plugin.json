@@ -1,6 +1,6 @@
 {
   "name": "radicle",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "Radicle CLI support for Claude Code - patches, issues, node operations, and peer-to-peer collaboration",
   "skills": [
     "./skills/radicle/SKILL.md"
