@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-04-28
+
+### Changed
+
+- **Breaking: Split monolith into three composable plugins.** The single `radicle` plugin (28KB always-loaded) is now three independently installable plugins:
+  - **radicle** (core): Radicle CLI support — patches, issues, node ops (~4KB)
+  - **radicle-extras**: Plan + Context COBs, task workflows (~5KB)
+  - **radicle-autonomy**: Multi-agent orchestration, worktree dispatch (~2KB)
+- Existing users with `"radicle@rad-skill": true` get the slimmed core automatically — no settings change required
+- Users who rely on `/rad-import`, `/rad-sync`, `/rad-status`, or `/rad-context` must enable `"radicle-extras@rad-skill": true`
+- Users who rely on the `plan-manager` and `worker` agents must enable `"radicle-autonomy@rad-skill": true`
+- Core skill rewritten from 416 lines to ~95 lines — CLI reference material moved to on-demand `references/` files
+- Plan and Context skills combined into a single ~115 line skill in radicle-extras
+- Agent prompts slimmed from 19KB to 9KB by removing duplicated CLI syntax
+- Marketplace now lists three plugins; directory structure uses `plugins/` subdirectories
+
+### Added
+
+- `/rad-dispatch` command (radicle-autonomy) — extracted from plan-manager agent as a standalone dispatch analysis command
+- Session-start hook in radicle (core) hints about radicle-extras when COB CLIs are detected
+- On-demand reference files: `plan-commands.md`, `context-commands.md`, `context-json-schema.md`, `github-mirror.md`
+- Agent frontmatter now includes `model` and `color` fields
+
+### Removed
+
+- Root-level `skills/`, `hooks/`, `.claude-plugin/commands/`, `.claude-plugin/agents/` (replaced by `plugins/` subdirectories)
+
+### Migration
+
+Update `enabledPlugins` in `~/.claude/settings.json`:
+
+```json
+{
+  "enabledPlugins": {
+    "radicle@rad-skill": true,
+    "radicle-extras@rad-skill": true,
+    "radicle-autonomy@rad-skill": true
+  }
+}
+```
+
+Core-only users need only `"radicle@rad-skill": true` (unchanged from before).
+
+## [0.9.0] - 2026-03-01
+
+### Changed
+
+- Removed pi support — now a Claude Code-only plugin
+
 ## [0.8.0] - 2026-03-01
 
 ### Added
