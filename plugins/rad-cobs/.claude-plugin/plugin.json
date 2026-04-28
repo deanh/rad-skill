@@ -1,0 +1,14 @@
+{
+  "name": "radicle-extras",
+  "version": "0.10.0",
+  "description": "Plan and Context COB support for Radicle task workflows - import issues, sync tasks, capture session observations",
+  "skills": [
+    "./skills/rad-cobs/SKILL.md"
+  ],
+  "commands": [
+    "./commands/rad-import.md",
+    "./commands/rad-sync.md",
+    "./commands/rad-status.md",
+    "./commands/rad-context.md"
+  ]
+}

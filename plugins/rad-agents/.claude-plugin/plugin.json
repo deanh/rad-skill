@@ -1,0 +1,15 @@
+{
+  "name": "radicle-autonomy",
+  "version": "0.10.0",
+  "description": "Multi-agent orchestration for Radicle plans - dispatch tasks to parallel worktree workers",
+  "skills": [
+    "./skills/rad-orchestration/SKILL.md"
+  ],
+  "commands": [
+    "./commands/rad-dispatch.md"
+  ],
+  "agents": [
+    "./agents/plan-manager.md",
+    "./agents/worker.md"
+  ]
+}

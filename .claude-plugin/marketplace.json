@@ -6,7 +6,15 @@
   "plugins": [
     {
       "name": "radicle",
-      "source": "./"
+      "source": "./plugins/rad-core"
+    },
+    {
+      "name": "radicle-extras",
+      "source": "./plugins/rad-cobs"
+    },
+    {
+      "name": "radicle-autonomy",
+      "source": "./plugins/rad-agents"
     }
   ]
 }
